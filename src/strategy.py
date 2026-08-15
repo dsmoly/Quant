@@ -1,31 +1,44 @@
-"""RAMM -- Robust Adaptive Market Maker with mean-field regime detection.
+"""RAMM -- Robust Adaptive Market Maker for a competitive dealer market.
 
-The trading idea, in one paragraph
-----------------------------------
+The original idea, and what survived testing
+--------------------------------------------
 The robust market-making paper gives a market maker three ambiguity budgets that
 move her quotes in *opposite* directions: aversion to drift misspecification
 (phi_alpha) widens the total spread and pulls inventory to flat faster, while
 aversion to fill-probability misspecification (phi_kappa) tightens quotes to
-churn more.  It treats those budgets as fixed preferences.  The mean-field paper
-supplies the missing state variable that says which one you should be running:
-in a dealer market, fills depend on your quote *relative to the population mean
-quote* mu_t, and a population of homogeneous learning market makers drifts to
-supra-competitive quotes about 20% above the mean-field Nash level, with
-heavy-tailed inventories as the tell.
+churn more.  It treats those budgets as fixed preferences.  The starting
+hypothesis here was that the mean-field paper supplies the state variable telling
+you which to run: since a population of homogeneous *learning* dealers drifts to
+supra-competitive quotes ~20% wide of the Nash level, a market maker who detects
+that gap should switch between an aggressive and a defensive ambiguity vector.
 
-So: estimate where the population is quoting, compare it to the Nash benchmark
-computed from the mean-field game, and set the ambiguity vector from that gap.
+That hypothesis was tested directly (``experiments/regime_sweep.py``) and **it
+does not hold**.  Pinning the market in each regime and sweeping a fixed
+(phi_alpha, phi) shows the response surface has essentially the same shape in
+both: every apparent gain from switching disappears under an out-of-sample
+split.  A supra-competitive market is uniformly *better* for a market maker -- a
+level shift, not a change in the trade-off -- so there is nothing to switch on.
 
-  * Market quoting above Nash (supra-competitive, fat spreads to be won):
-    raise phi.  Quote inside the crowd, harvest volume, be the heterogeneous
-    agent that the mean-field paper shows pulls the market back to equilibrium.
-  * Market at or below Nash (competitive, thin margins, every fill is a
-    potential adverse selection): raise phi_alpha.  Widen, skew hard on
-    inventory, and get flat.
+Two things did survive, and they are what this module implements:
 
-Realised volatility and the *tail weight of our own inventory distribution* also
-feed phi_alpha, because heavy inventory tails are precisely the state the
-mean-field paper associates with a market maker being pushed around.
+  1. **The mean-field channel is about the reference model, not a switch.**
+     Fills depend on your quote relative to the population quote, so a market
+     maker pricing off a frozen reference model is mispriced by a large factor.
+     Recalibrating kappa online tracks the crowd implicitly and in the right
+     direction: when the crowd widens, the same depth wins more often, the
+     estimated kappa falls, and the quote widens *with* the crowd.  That is what
+     the mean-field model implies -- quotes there are strategic complements -- and
+     the opposite of the undercutting the original story assumed.
+
+  2. **The defensive lever is driven by flow toxicity, not by competition.**
+     The sweep finds the optimal phi_alpha moving sharply with the market-order
+     impact eps (0 at the papers' calibration, up to the grid ceiling at 15x it)
+     and not at all with the competitive regime.  So phi_alpha is driven here by
+     measured post-fill markout, with realised volatility and the inventory tail
+     weight as secondary terms.
+
+The regime switch is retained but disabled by default (``gap_sensitivity = 0``),
+so the refuted hypothesis stays reproducible rather than merely asserted.
 
 Everything the strategy consumes is observable to a real desk: its own quotes
 and fills, RFQ arrival times, midprice moves, and cover prices on lost trades.
@@ -33,6 +46,7 @@ and fills, RFQ arrival times, midprice moves, and cover prices on lost trades.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 
 import numpy as np
@@ -50,6 +64,8 @@ class EstimatorConfig:
     sigma_halflife: float = 30.0    # seconds, for realised volatility
     mu_halflife: float = 40.0       # observations, for the cover / population quote
     tail_halflife: float = 400.0    # observations, for the inventory tail weight
+    markout_seconds: float = 5.0    # horizon over which a fill's markout is scored
+    markout_halflife: float = 60.0  # observations, for the toxicity estimate
 
 
 class OnlineReferenceModel:
@@ -70,6 +86,8 @@ class OnlineReferenceModel:
         self.mu = mu0
         self.q_max = q_max
         self.tail = 0.0
+        self.toxicity = 0.0
+        self._pending: deque[tuple[float, float, int]] = deque()  # (time, mid, sign)
         self._last_mid: float | None = None
         self.n_rfq = 0
         self.n_fills = 0
@@ -132,20 +150,63 @@ class OnlineReferenceModel:
         in_tail = 1.0 if abs(q) > 0.6 * self.q_max else 0.0
         self.tail = float((1 - a) * self.tail + a * in_tail)
 
+    def observe_fill_for_markout(self, time: float, mid: float, side: str) -> None:
+        """Record a fill so its markout can be scored once the horizon has passed."""
+        self._pending.append((time, mid, -1 if side == "ask" else 1))
+
+    def settle_markouts(self, time: float, mid: float) -> None:
+        """Score any fills that are now old enough, and update the toxicity estimate.
+
+        Markout is the desk's direct measure of adverse selection: how far the
+        midprice moved against the position we took on. Selling into a rising
+        market and buying into a falling one both register as positive. This is
+        the empirical counterpart of the market-order impact ``eps`` in the robust
+        paper's true dynamics, and the sweep in ``experiments/regime_sweep.py``
+        finds it -- not the competitive regime -- is what should be driving the
+        defensive ambiguity budget.
+        """
+        horizon = self.cfg.markout_seconds
+        while self._pending and time - self._pending[0][0] >= horizon:
+            _, fill_mid, sign = self._pending.popleft()
+            adverse = -sign * (mid - fill_mid)
+            a = self._alpha(self.cfg.markout_halflife)
+            self.toxicity = float((1 - a) * self.toxicity + a * adverse)
+
 
 @dataclass
 class AmbiguityPolicy:
-    """Map the mean-field state to the ambiguity vector (phi_alpha, phi)."""
+    """Map the observed market state to the ambiguity vector (phi_alpha, phi).
+
+    The two levers are driven by *different* signals, and which signal drives
+    which is an empirical result rather than a modelling choice -- see
+    ``experiments/regime_sweep.py`` and ``RESULTS.md``:
+
+      * ``phi_alpha`` (defensive) is driven by **measured flow toxicity**: the
+        post-fill markout, in units of the half-spread being quoted. The sweep
+        finds the optimal phi_alpha moves sharply with toxicity (0 at the papers'
+        eps = 0.001, up to the grid ceiling at eps = 0.015) and not at all with
+        the competitive regime. Realised volatility and the inventory tail weight
+        enter as secondary terms.
+      * ``phi`` (aggressive) is driven by the gap between the population quote
+        and the mean-field Nash benchmark. This is the channel the sweep does
+        *not* support out of sample; ``gap_sensitivity = 0`` disables it, and the
+        recommended configuration leaves it off. It is retained, off by default,
+        so the hypothesis stays reproducible rather than merely asserted.
+    """
 
     nash_depth: float = 0.0197      # mean-field Nash half-spread, price units
     gap_deadband: float = 0.03      # ignore gaps this small; they are noise
     gap_reference: float = 0.22     # the paper's ~20% supra-competitive level
-    phi_max: float = 12.0           # aggressive lever cap
-    phi_alpha_base: float = 1.5     # defensive lever at reference volatility
+    gap_sensitivity: float = 0.0    # 0 disables the (unsupported) regime switch
+    phi_base: float = 16.0          # churn lever; the sweep wants this high always
+    phi_max: float = 32.0
+    phi_alpha_base: float = 1.0     # defensive lever floor
     phi_alpha_max: float = 25.0
     sigma_reference: float = 0.01
-    sigma_sensitivity: float = 4.0
-    tail_sensitivity: float = 20.0
+    sigma_sensitivity: float = 2.0
+    tail_sensitivity: float = 10.0
+    toxicity_reference: float = 0.25   # markout / half-spread at which we go defensive
+    toxicity_sensitivity: float = 40.0
 
     def gap(self, mu: float) -> float:
         """Relative distance of the population quote from the competitive benchmark.
@@ -155,18 +216,25 @@ class AmbiguityPolicy:
         """
         return (mu - self.nash_depth) / max(self.nash_depth, 1e-9)
 
-    def __call__(self, mu: float, sigma: float, tail: float) -> tuple[float, float]:
-        g = self.gap(mu)
-        span = max(self.gap_reference - self.gap_deadband, 1e-9)
-        aggression = float(np.clip((g - self.gap_deadband) / span, 0.0, 1.0))
-        phi = self.phi_max * aggression
+    def __call__(self, mu: float, sigma: float, tail: float,
+                 toxicity: float = 0.0) -> tuple[float, float]:
+        # Aggressive lever: a high floor, optionally nudged by the competitive gap.
+        phi = self.phi_base
+        if self.gap_sensitivity:
+            span = max(self.gap_reference - self.gap_deadband, 1e-9)
+            aggression = float(np.clip((self.gap(mu) - self.gap_deadband) / span, 0.0, 1.0))
+            phi += self.gap_sensitivity * aggression * (self.phi_max - self.phi_base)
 
+        # Defensive lever: markout as a share of the half-spread on offer, plus
+        # volatility and inventory-tail terms.
+        tox_ratio = max(toxicity, 0.0) / max(mu, 1e-9)
+        phi_alpha = self.phi_alpha_base
+        phi_alpha += self.toxicity_sensitivity * max(tox_ratio - self.toxicity_reference, 0.0)
         vol_ratio = sigma / max(self.sigma_reference, 1e-12)
-        phi_alpha = self.phi_alpha_base * (1.0 + self.sigma_sensitivity * max(vol_ratio - 1.0, 0.0))
+        phi_alpha += self.phi_alpha_base * self.sigma_sensitivity * max(vol_ratio - 1.0, 0.0)
         phi_alpha += self.tail_sensitivity * tail
-        # A market at or inside Nash leaves no margin for error: lean defensive.
-        phi_alpha *= 1.0 + max(-g, 0.0) * 3.0
-        return float(np.clip(phi_alpha, 0.0, self.phi_alpha_max)), float(phi)
+        return (float(np.clip(phi_alpha, 0.0, self.phi_alpha_max)),
+                float(np.clip(phi, 0.0, self.phi_max)))
 
 
 class MarketMaker:
@@ -215,7 +283,10 @@ class MarketMaker:
         self.est.observe_mid(ev.mid, ev.dt)
         self.est.observe_inventory(ev.inventory)
         self.est.observe_rfq(ev.quoted_depth, ev.filled, ev.dt)
-        if not ev.filled:
+        self.est.settle_markouts(ev.time, ev.mid)
+        if ev.filled:
+            self.est.observe_fill_for_markout(ev.time, ev.mid, ev.side)
+        else:
             self.est.observe_cover(ev.cover)
         self._since_resolve += 1
         if self._since_resolve >= self.resolve_every:
@@ -237,14 +308,16 @@ class AdaptiveRAMM(MarketMaker):
     name = "ramm"
 
     def __init__(self, policy: AmbiguityPolicy | None = None, **kwargs):
-        kwargs.setdefault("phi_alpha", 1.5)
+        kwargs.setdefault("phi_alpha", 1.0)
+        kwargs.setdefault("phi", 16.0)
         super().__init__(**kwargs)
         self.policy = policy or AmbiguityPolicy()
         self.phi_alpha_log: list[float] = []
         self.phi_log: list[float] = []
 
     def _ambiguity(self) -> tuple[float, float]:
-        phi_alpha, phi = self.policy(self.est.mu, self.est.sigma, self.est.tail)
+        phi_alpha, phi = self.policy(self.est.mu, self.est.sigma, self.est.tail,
+                                     self.est.toxicity)
         self.phi_alpha_log.append(phi_alpha)
         self.phi_log.append(phi)
         return phi_alpha, phi

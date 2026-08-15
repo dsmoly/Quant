@@ -97,9 +97,10 @@ def _named(mm, name: str):
     return mm
 
 
-def _build_market(seed: int, nash_depth: float, q_max: int, theta: float) -> DealerMarket:
+def _build_market(seed: int, nash_depth: float, q_max: int, theta: float,
+                  eps: float = 0.001) -> DealerMarket:
     return DealerMarket(
-        dynamics=TrueDynamics(),
+        dynamics=TrueDynamics(eps=eps),
         competition=CompetitionParams(nash_depth=nash_depth),
         q_max=q_max,
         theta=theta,
@@ -108,14 +109,14 @@ def _build_market(seed: int, nash_depth: float, q_max: int, theta: float) -> Dea
 
 
 def run_arm(factory, seeds, horizon: float, nash_depth: float, q_max: int,
-            theta: float) -> ArmStats:
+            theta: float, eps: float = 0.001) -> ArmStats:
     pnls, fills, rfqs, inv_rms, inv_tail = [], [], [], [], []
     phis, phi_alphas = [], []
     name = None
     for seed in seeds:
         mm = factory()
         name = name or mm.name
-        market = _build_market(seed, nash_depth, q_max, theta)
+        market = _build_market(seed, nash_depth, q_max, theta, eps)
         res = market.run(mm, horizon)
         pnls.append(res.pnl)
         fills.append(res.n_fills)
@@ -152,6 +153,8 @@ def main(argv=None) -> int:
     ap.add_argument("--horizon", type=float, default=1800.0, help="episode length in seconds")
     ap.add_argument("--q-max", type=int, default=8, help="inventory limit")
     ap.add_argument("--theta", type=float, default=0.001, help="liquidation penalty")
+    ap.add_argument("--eps", type=float, default=0.001,
+                    help="market-order impact on the short-term alpha (flow toxicity)")
     ap.add_argument("--seed", type=int, default=20240614)
     ap.add_argument("--json", type=str, default=None, help="write results to this JSON file")
     args = ap.parse_args(argv)
@@ -191,7 +194,8 @@ def main(argv=None) -> int:
 
     print(f"mean-field Nash half-spread benchmark: {nash_depth:.5f} "
           f"(= {nash_depth * 27:.4f} in mean-field units)")
-    print(f"{args.paths} paths x {args.horizon:g}s, inventory limit +/-{args.q_max}\n")
+    print(f"{args.paths} paths x {args.horizon:g}s, inventory limit +/-{args.q_max}, "
+          f"flow toxicity eps={args.eps:g}\n")
     header = (f"{'arm':<22} {'meanPnL':>9} {'sdPnL':>9} {'Sharpe':>8} {'fills':>8} "
               f"{'PnL/fill':>10} {'hit':>7} {'invRMS':>7} {'invTail':>8} {'phi_a':>7} {'phi':>6}")
     print(header)
@@ -199,7 +203,8 @@ def main(argv=None) -> int:
 
     results = []
     for factory in arms:
-        stats = run_arm(factory, seeds, args.horizon, nash_depth, args.q_max, args.theta)
+        stats = run_arm(factory, seeds, args.horizon, nash_depth, args.q_max,
+                        args.theta, args.eps)
         results.append(stats)
         print(stats.row())
 

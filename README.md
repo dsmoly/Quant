@@ -35,54 +35,70 @@ converge to the competitive Nash equilibrium. It drifts about **20% wide of it**
 ("tacit collusion"), with heavy-tailed inventories as the tell. Introducing a
 heterogeneous agent pulls the market back toward equilibrium.
 
-So the strategy writes itself:
+That was the starting hypothesis:
 
 > **Solve the mean field game to get the competitive Nash spread. Estimate where
-> the population is actually quoting. Set the ambiguity vector from the gap.**
-
-- Market quoting **wide of Nash** — fat spreads on offer, low marginal risk in
-  winning one: raise `φ_κ`. Quote inside the crowd and harvest volume. Be the
-  heterogeneous agent.
-- Market quoting **at or inside Nash** — thin margins, and every fill is a
-  possible adverse selection: raise `φ_α`. Widen, skew hard on inventory, get flat.
-
-Realised volatility and the tail weight of the strategy's own inventory
-distribution also feed `φ_α`, because heavy inventory tails are exactly the state
-the mean-field paper associates with a dealer being pushed around.
-
-Everything consumed is available to a real desk: own quotes and fills, RFQ
-arrival times, midprice moves, and cover prices on lost trades.
+> the population is actually quoting. Set the ambiguity vector from the gap** —
+> raise `φ_κ` and undercut when the crowd is wide, raise `φ_α` and get flat when
+> it is tight.
 
 ---
 
-## Does it work? A partly negative result
+## What testing did to it
 
-**Read this before believing the story above.** The idea is only worth building
-if the optimal ambiguity vector genuinely *depends* on the competitive regime. So
-that was tested directly, by pinning the market in each regime and sweeping a
-fixed `(φ_α, φ)` over both (`experiments/regime_sweep.py`). The decision-relevant
-number is the **value of adaptation**: what an oracle that switches per regime
-earns, minus what the single best fixed vector earns.
+The hypothesis is only worth building if the optimal ambiguity vector genuinely
+*depends* on the competitive regime, so that was tested head-on
+(`experiments/regime_sweep.py`): pin the market in each regime, sweep a fixed
+`(φ_α, φ)` over both, and measure the **value of adaptation** — what an oracle
+switching per regime earns minus what the single best fixed vector earns, scored
+**out of sample** so grid-search noise cannot masquerade as signal.
 
-See [`RESULTS.md`](RESULTS.md) for the full grids. The summary:
+**It is refuted.** Every in-sample gain (~3–4% Sharpe) collapses to zero or
+negative on held-out paths, at three different levels of flow toxicity. And the
+premise had the sign backwards: in the mean-field intensity function a wider
+crowd *lowers* your fill elasticity, so the model implies you should widen *with*
+the crowd, not undercut it. Quotes there are strategic complements — which is
+exactly why a supra-competitive market sustains itself without anyone colluding.
 
-- **The robust layer works, and reproduces the paper.** Ambiguity aversion lifts
-  the Sharpe ratio of the P&L substantially over an ambiguity-neutral market
-  maker, which is the robust paper's headline claim.
-- **The adaptive layer, at the papers' own calibration, does not earn its
-  keep.** With flow toxicity at the published `ε = 0.001`, the two regimes want
-  essentially the same ambiguity vector. A supra-competitive market is simply
-  *better* for a market maker across the board — it is a level shift, not a
-  change in the shape of the trade-off — so there is nothing to switch on.
-- The regime signal itself is real and detectable; it is the *response* to it
-  that turns out to be near-flat.
+Two things did survive, and they are what the strategy now implements:
 
-The honest reading is that the mean-field paper's contribution to this strategy
-is **the benchmark, not the switch**: knowing where Nash sits tells you how much
-of the spread you are leaving on the table, and the robust machinery is what you
-should be running regardless. The adaptive arm is retained as an implemented,
-tested, and *measured* hypothesis, with the measurement reported rather than
-buried.
+1. **The mean-field channel is about the reference model, not a switch.** Fills
+   depend on your quote relative to the crowd's, so a market maker pricing off a
+   frozen reference model quotes ~2.5× too wide for a competitive market and
+   barely trades. Recalibrating `κ` online tracks the crowd implicitly and in the
+   right direction. Worth **+50–60% mean P&L**.
+2. **The defensive lever is driven by flow toxicity, not competition.** The sweep
+   finds the optimal `φ_α` moving sharply with market-order impact (0 at the
+   papers' `ε`, at the grid ceiling at 15×) and not at all with the competitive
+   regime. So `φ_α` is driven by measured **post-fill markout**.
+
+The regime switch is kept but **disabled by default** (`gap_sensitivity = 0`), so
+the refuted hypothesis stays reproducible rather than quietly deleted.
+
+### Headline numbers
+
+Benign flow, at the papers' own calibration (150 paths × 1200s):
+
+| arm | mean P&L | Sharpe | fills |
+|---|---|---|---|
+| neutral / frozen | 7.93 | 6.93 | 225 |
+| robust / frozen | 8.37 | 9.09 | 253 |
+| **robust / adaptive-ref** | 12.56 | **9.94** | 660 |
+| ramm / adaptive-φ | **13.99** | 8.56 | 841 |
+
+Toxic flow (15× market-order impact) — where the pieces separate:
+
+| arm | mean P&L | Sharpe | mean φ_α |
+|---|---|---|---|
+| neutral / adaptive-ref | **−2.59** | **−0.56** | |
+| robust / adaptive-ref | 3.36 | 2.15 | |
+| **ramm / adaptive-φ** | **3.84** | **3.00** | 13.3 |
+
+Adapting the fill model *without* robustness is actively dangerous: it correctly
+infers it can win more flow by tightening, and walks into toxic flow. RAMM's
+markout channel fires and delivers **+39% Sharpe** over the next best arm.
+
+Full grids, methodology and caveats in [`RESULTS.md`](RESULTS.md).
 
 ---
 
@@ -95,7 +111,7 @@ src/market.py            simulator combining both sources of misspecification
 src/strategy.py          online estimation + the ambiguity policy (RAMM)
 src/backtest.py          Monte Carlo comparison of the arms
 experiments/regime_sweep.py   the test of whether adaptation has any value
-tests/                   64 tests, incl. checks against published figures
+tests/                   69 tests, incl. checks against published figures
 ```
 
 ### `mfg_equilibrium.py`
@@ -178,21 +194,28 @@ strategy.
 ```bash
 pip install -r requirements.txt
 
-python -m src.backtest --paths 200 --horizon 1800      # compare the arms
-python -m experiments.regime_sweep --paths 60          # test the adaptive premise
-python -m pytest tests/ -q                             # 64 tests
+# compare the arms, benign flow then toxic flow
+python -m src.backtest --paths 150 --horizon 1200 --eps 0.001
+python -m src.backtest --paths 150 --horizon 1200 --eps 0.015
+
+# the test that refuted the regime-switching premise
+python -m experiments.regime_sweep --paths 60 --horizon 500 --eps 0.001
+
+python -m pytest tests/ -q                             # 69 tests
 ```
 
 The mean-field solve takes about 15 seconds and is cached to `.mfg_cache.json`.
+Each backtest arm is a few minutes; the sweep is ~5 minutes per toxicity level.
 
 ---
 
 ## Caveats before anyone trades this
 
 - **It is validated on a simulator, not on data.** Both papers' dynamics are
-  implemented faithfully, but a simulator that shares the strategy's assumptions
-  cannot falsify them. Real fill data is the next step, and the adaptive layer in
-  particular should be re-tested there rather than assumed.
+  implemented faithfully, and the simulator was strong enough to refute the
+  headline hypothesis — but it shares assumptions with the strategy, so it cannot
+  confirm that the surviving effects exist in a real market. Real fill data is
+  the next step.
 - **Cover-price feedback is selection-biased in reality.** `μ` is estimated from
   cover on lost trades, which on a live desk is biased toward tighter competitor
   quotes — the trades you lose are the ones where someone was aggressive. The
