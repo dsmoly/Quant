@@ -91,6 +91,12 @@ class ArmStats:
                 f"{self.mean_phi_alpha:>7.2f} {self.mean_phi:>6.2f}")
 
 
+def _named(mm, name: str):
+    """Label an arm for the results table."""
+    mm.name = name
+    return mm
+
+
 def _build_market(seed: int, nash_depth: float, q_max: int, theta: float) -> DealerMarket:
     return DealerMarket(
         dynamics=TrueDynamics(),
@@ -157,10 +163,30 @@ def main(argv=None) -> int:
                   mu0=nash_depth)
     policy = AmbiguityPolicy(nash_depth=nash_depth)
 
+    # The arms decompose the strategy into its two independent claims.
+    #
+    #   frozen vs adaptive reference model
+    #       Isolates the mean-field channel.  A frozen market maker prices off the
+    #       long-run (lambda, kappa, sigma) forever.  An adaptive one recalibrates
+    #       kappa online, which implicitly tracks the population quote: when the
+    #       crowd widens, the same depth wins more often, the estimated kappa
+    #       falls, and the quote widens with the crowd.  That is the *right*
+    #       direction under the mean-field model, where quotes are strategic
+    #       complements -- not the undercutting the adaptive-phi story assumes.
+    #
+    #   phi = 0 vs fixed phi vs adaptive phi
+    #       Isolates the robust channel and then the regime switch on top of it.
+    def frozen(**kw):
+        return dict(common, adapt_reference=False, **kw)
+
     arms = [
-        lambda: neutral_market_maker(**common),
-        lambda: fixed_robust_market_maker(phi_alpha=2.0, phi=8.0, **common),
-        lambda: AdaptiveRAMM(policy=policy, **common),
+        lambda: _named(neutral_market_maker(**frozen()), "neutral/frozen"),
+        lambda: _named(neutral_market_maker(**common), "neutral/adaptive-ref"),
+        lambda: _named(fixed_robust_market_maker(phi_alpha=6.0, phi=4.0, **frozen()),
+                       "robust/frozen"),
+        lambda: _named(fixed_robust_market_maker(phi_alpha=6.0, phi=4.0, **common),
+                       "robust/adaptive-ref"),
+        lambda: _named(AdaptiveRAMM(policy=policy, **common), "ramm/adaptive-phi"),
     ]
 
     print(f"mean-field Nash half-spread benchmark: {nash_depth:.5f} "

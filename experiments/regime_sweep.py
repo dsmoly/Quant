@@ -32,7 +32,7 @@ from src.market import CompetitionParams, DealerMarket, TrueDynamics
 from src.strategy import MarketMaker
 
 PHI_ALPHAS = (0.0, 2.0, 6.0, 15.0)
-PHIS = (0.0, 4.0, 8.0, 16.0, 32.0)
+PHIS = (0.0, 8.0, 16.0, 32.0)
 
 
 def pinned_competition(nash_depth: float, supra: bool, supra_multiple: float = 1.25):
