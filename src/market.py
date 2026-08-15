@@ -144,12 +144,23 @@ class DealerMarket:
         competition: CompetitionParams | None = None,
         q_max: int = 8,
         theta: float = 0.001,
+        latency: float = 0.0,
+        taker_fee: float = 0.0,
+        taker_slippage: float = 0.0,
         rng: np.random.Generator | None = None,
     ):
         self.dyn = dynamics or TrueDynamics()
         self.comp = competition or CompetitionParams()
         self.q_max = q_max
-        self.theta = theta          # liquidation penalty l(q) = theta * q
+        self.theta = theta            # liquidation penalty l(q) = theta * q
+        # Round-trip delay between a decision and its effect. For a taker it is
+        # order submission latency: the order executes at the price prevailing
+        # ``latency`` seconds later, not the price that triggered it. For a maker
+        # it is quote-update latency: a new quote only becomes live after the
+        # delay, so the market can trade against a stale one in between.
+        self.latency = float(latency)
+        self.taker_fee = float(taker_fee)          # per unit, on top of the spread
+        self.taker_slippage = float(taker_slippage)  # per unit, price concession
         self.rng = rng or np.random.default_rng()
         self.reset()
 
@@ -166,6 +177,11 @@ class DealerMarket:
         self.mu = self.comp.nash_depth
         self.fills: list[Fill] = []
         self.supra_time = 0.0
+        self._pending_target: tuple[float, int] | None = None   # (execute_at, target)
+        self._live_quote: tuple[float, float] = (np.inf, np.inf)
+        self._quote_queue: list[tuple[float, float, float]] = []  # (live_at, ask, bid)
+        self.taker_costs = 0.0        # fees and slippage paid, tracked separately
+        self.stale_fills = 0          # fills against a quote that was already superseded
 
     @property
     def wealth(self) -> float:
@@ -231,6 +247,24 @@ class DealerMarket:
         self.kap[side_idx] += d.eta_kap
         self.kap[other] += d.nu_kap
 
+    @property
+    def taker_half_spread(self) -> float:
+        """All-in cost of crossing one unit: spread, slippage and fee."""
+        return self.mu + self.taker_slippage + self.taker_fee
+
+    def _publish_quote(self, ask: float, bid: float) -> None:
+        """Queue a quote update; it goes live one latency later."""
+        if self.latency <= 0:
+            self._live_quote = (ask, bid)
+        else:
+            self._quote_queue.append((self.t + self.latency, ask, bid))
+
+    def _refresh_quote(self) -> None:
+        """Promote any queued quote whose latency has elapsed."""
+        while self._quote_queue and self._quote_queue[0][0] <= self.t:
+            _, ask, bid = self._quote_queue.pop(0)
+            self._live_quote = (ask, bid)
+
     def _intensity_bound(self) -> float:
         """Upper bound on the total arrival rate over the coming interval.
 
@@ -272,8 +306,19 @@ class DealerMarket:
             side_idx = 0 if u < self.lam[0] else 1
             side = "ask" if side_idx == 0 else "bid"
 
-            ask_depth, bid_depth = strategy.quote(self.q)
-            depth = ask_depth if side == "ask" else bid_depth
+            # Quote-update latency: the market trades against whatever quote is
+            # currently live, which may predate the maker's latest decision.
+            self._refresh_quote()
+            fresh = strategy.quote(self.q)
+            if self.latency <= 0:
+                live_ask, live_bid = fresh
+                self._live_quote = fresh
+            else:
+                live_ask, live_bid = self._live_quote
+                if live_ask != fresh[0] or live_bid != fresh[1]:
+                    self._publish_quote(*fresh)
+                    self.stale_fills += 1
+            depth = live_ask if side == "ask" else live_bid
             blocked = (side == "ask" and self.q <= -self.q_max) or \
                       (side == "bid" and self.q >= self.q_max)
             quoting = bool(np.isfinite(depth)) and not blocked
@@ -358,10 +403,20 @@ class DealerMarket:
         while self.t < horizon:
             bound = self._intensity_bound()
             dt = self.rng.exponential(1.0 / bound)
-            if self.t + dt > horizon:
-                self._advance(horizon - self.t)
+            t_next = self.t + dt
+
+            # A queued order executes at its own time, at the price prevailing
+            # then -- before the next market order, if it comes due first.
+            if self._pending_target is not None and self._pending_target[0] <= min(t_next, horizon):
+                exec_at, target = self._pending_target
+                self._advance(max(exec_at - self.t, 0.0))
+                self._pending_target = None
+                self._execute_taker(target)
+
+            if t_next > horizon:
+                self._advance(max(horizon - self.t, 0.0))
                 break
-            self._advance(dt)
+            self._advance(max(t_next - self.t, 0.0))
 
             total = float(self.lam.sum())
             u = self.rng.random() * bound
@@ -375,11 +430,17 @@ class DealerMarket:
 
             obs = TakerObservation(
                 time=self.t, dt=self.t - t_prev_event, mid=self.S, order_side=side,
-                half_spread=self.mu, inventory=self.q, wealth=self.wealth,
+                half_spread=self.taker_half_spread, inventory=self.q, wealth=self.wealth,
+                pending_target=None if self._pending_target is None else self._pending_target[1],
             )
             t_prev_event = self.t
             target = trader.decide(obs)
-            self._execute_taker(target)
+            if self.latency <= 0:
+                self._execute_taker(target)
+            elif target != self.q:
+                # Submission latency: the decision is made now, the fill happens
+                # later, at whatever the price has become by then.
+                self._pending_target = (self.t + self.latency, target)
 
             inv_path.append(self.q)
             pnl_path.append(self.wealth)
@@ -414,17 +475,19 @@ class DealerMarket:
         exactly as any other market order of that side would.
         """
         target = int(np.clip(target, -self.q_max, self.q_max))
+        c = self.taker_half_spread
         while self.q != target:
             buying = target > self.q
-            price = self.S + self.mu if buying else self.S - self.mu
+            price = self.S + c if buying else self.S - c
             if buying:
                 self.cash -= price
                 self.q += 1
             else:
                 self.cash += price
                 self.q -= 1
-            # Depth is recorded as negative: the taker pays the spread it quotes past.
-            self.fills.append(Fill("bid" if buying else "ask", -self.mu, price, self.t))
+            self.taker_costs += self.taker_slippage + self.taker_fee
+            # Depth is recorded as negative: the taker pays what it crosses.
+            self.fills.append(Fill("bid" if buying else "ask", -c, price, self.t))
             self._apply_market_order(0 if buying else 1, excite_arrivals=False)
 
 
@@ -436,9 +499,10 @@ class TakerObservation:
     dt: float                        # time since the previous order
     mid: float
     order_side: str                  # "buy" if the order lifted the offer
-    half_spread: float               # dealer population quote: what crossing costs
+    half_spread: float               # all-in cost of crossing: spread + slippage + fee
     inventory: int
     wealth: float
+    pending_target: int | None = None   # position an in-flight order will reach
 
 
 @dataclass

@@ -430,7 +430,12 @@ class RobustDirectionalTrader:
         self.target_log.append(target)
         self.band_log.append(band)
 
-        q = obs.inventory
+        # A working order is already going to move the position, so decide against
+        # where the book *will* be, not where it is. Without this the trader
+        # re-issues the same order on every event while the first is in flight.
+        q = obs.inventory if obs.pending_target is None else obs.pending_target
+        if obs.pending_target is not None:
+            return obs.pending_target          # one order in flight at a time
         gap = target - q
         if abs(gap) <= band:
             return q                       # inside the band: the trade does not pay
