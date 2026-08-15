@@ -242,6 +242,8 @@ class DealerMarket:
         inv_path: list[int] = []
         pnl_path: list[float] = []
         mu_path: list[float] = []
+        time_path: list[float] = []
+        mid_path: list[float] = []
         n_events = 0
 
         while self.t < horizon:
@@ -294,6 +296,8 @@ class DealerMarket:
             inv_path.append(self.q)
             pnl_path.append(self.wealth)
             mu_path.append(self.mu)
+            time_path.append(self.t)
+            mid_path.append(self.S)
             n_events += 1
 
         # Terminal payoff X_T + q_T (S_T - l(q_T)) with l(q) = theta * q: the cost of
@@ -307,6 +311,11 @@ class DealerMarket:
             inventory_path=np.array(inv_path),
             pnl_path=np.array(pnl_path),
             mu_path=np.array(mu_path),
+            time_path=np.array(time_path),
+            mid_path=np.array(mid_path),
+            fills=list(self.fills),
+            final_mid=self.S,
+            theta=self.theta,
             supra_fraction=self.supra_time / max(horizon, 1e-9),
         )
 
@@ -320,6 +329,11 @@ class RunResult:
     inventory_path: np.ndarray
     pnl_path: np.ndarray
     mu_path: np.ndarray
+    time_path: np.ndarray = field(default_factory=lambda: np.array([]))
+    mid_path: np.ndarray = field(default_factory=lambda: np.array([]))
+    fills: list = field(default_factory=list)
+    final_mid: float = float("nan")
+    theta: float = 0.0
     supra_fraction: float = 0.0
     phi_alpha_path: np.ndarray = field(default_factory=lambda: np.array([]))
     phi_path: np.ndarray = field(default_factory=lambda: np.array([]))

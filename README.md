@@ -111,7 +111,10 @@ src/market.py            simulator combining both sources of misspecification
 src/strategy.py          online estimation + the ambiguity policy (RAMM)
 src/backtest.py          Monte Carlo comparison of the arms
 experiments/regime_sweep.py   the test of whether adaptation has any value
-tests/                   69 tests, incl. checks against published figures
+src/analytics.py         P&L attribution and backtest metrics
+experiments/performance_report.py  equity curves + metrics data
+experiments/build_report.py        renders the report page
+tests/                   85 tests, incl. checks against published figures
 ```
 
 ### `mfg_equilibrium.py`
@@ -201,7 +204,7 @@ python -m src.backtest --paths 150 --horizon 1200 --eps 0.015
 # the test that refuted the regime-switching premise
 python -m experiments.regime_sweep --paths 60 --horizon 500 --eps 0.001
 
-python -m pytest tests/ -q                             # 69 tests
+python -m pytest tests/ -q                             # 85 tests
 ```
 
 The mean-field solve takes about 15 seconds and is cached to `.mfg_cache.json`.
