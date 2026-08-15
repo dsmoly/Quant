@@ -102,6 +102,42 @@ Full grids, methodology and caveats in [`RESULTS.md`](RESULTS.md).
 
 ---
 
+## The other side of the trade
+
+`src/directional.py` points the same robust control the other way: a **taker** that
+pays the spread to hold a position and earns the order-flow drift the market maker
+was losing to. The ergodic HJB has an exact quadratic solution (residual < 1e-12),
+and the two levers read differently in this direction:
+
+```
+h₂ = −√(2k φ_α σ²)      ρ = −h₂/2k      h₁ = 1/(β+ρ)
+target  q*(α) = α / ((β+ρ)|h₂|)         no-trade band  b = c/|h₂|
+```
+
+`φ_α` becomes the **position-sizing** knob (q* ∝ 1/√φ_α), volatility targeting falls
+out (q* ∝ 1/σ), and the decision to trade at all reduces to **|α| > c(β+ρ)** — which
+does not depend on risk appetite at all.
+
+The two strategies are opposite sides of one wedge, so sweeping the market-order
+impact ε moves value from one to the other:
+
+| ε | directional | market maker | MM capture ratio |
+|---|---|---|---|
+| 0.001 | −0.23 | **14.28** | 93% |
+| 0.006 | +0.37 | **8.86** | 67% |
+| 0.010 | +5.43 | 5.83 | 54% |
+| 0.015 | **+13.37** | 4.02 | 41% |
+| 0.025 | **+24.86** | 0.86 | 21% |
+
+**Crossover at ε ≈ 0.010 on P&L, ε ≈ 0.016 on Sharpe.** At the papers' own
+calibration (ε = 0.001) the directional strategy *loses money* — the drift is far
+too small to pay for the spread. Signal-destruction controls confirm the P&L above
+the crossover is real prediction: `flat` earns exactly 0, `buy-and-hold` earns
+nothing, inverting the signal loses **more** than the live arm makes (both pay the
+same spread), and shuffling its timing is catastrophic.
+
+---
+
 ## Layout
 
 ```
@@ -110,11 +146,13 @@ src/robust_quotes.py     robust optimal depths (model-uncertainty paper)
 src/market.py            simulator combining both sources of misspecification
 src/strategy.py          online estimation + the ambiguity policy (RAMM)
 src/backtest.py          Monte Carlo comparison of the arms
-experiments/regime_sweep.py   the test of whether adaptation has any value
+experiments/regime_sweep.py        the test of whether adaptation has any value
+experiments/directional_sweep.py   taker vs maker across flow toxicity
+src/directional.py       robust directional control + order-flow alpha (the taker)
 src/analytics.py         P&L attribution and backtest metrics
 experiments/performance_report.py  equity curves + metrics data
 experiments/build_report.py        renders the report page
-tests/                   85 tests, incl. checks against published figures
+tests/                   119 tests, incl. checks against published figures
 ```
 
 ### `mfg_equilibrium.py`
@@ -204,7 +242,7 @@ python -m src.backtest --paths 150 --horizon 1200 --eps 0.015
 # the test that refuted the regime-switching premise
 python -m experiments.regime_sweep --paths 60 --horizon 500 --eps 0.001
 
-python -m pytest tests/ -q                             # 85 tests
+python -m pytest tests/ -q                             # 119 tests
 ```
 
 The mean-field solve takes about 15 seconds and is cached to `.mfg_cache.json`.

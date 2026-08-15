@@ -403,24 +403,7 @@ def equity_table(arms, horizon) -> str:
 
 # ----------------------------------------------------------------------- page
 
-
-def build(benign, toxic, out_path):
-    hz = benign["horizon"]
-    b_arms, t_arms = benign["arms"], toxic["arms"]
-    b_by = {a["name"]: a for a in b_arms}
-    t_by = {a["name"]: a for a in t_arms}
-    rec_b = b_by["robust / adaptive-ref"]
-    rec_t = t_by["ramm / adaptive-phi"]
-
-    eq_b, pay_b = line_chart(b_arms, chart_id="eqb", horizon=hz)
-    eq_t, pay_t = line_chart(t_arms, chart_id="eqt", horizon=hz)
-
-    def attr(a):
-        m = a["metrics"]
-        return {k: m[k] for k in ("spread_capture", "adverse_selection",
-                                  "inventory_pnl", "liquidation")}
-
-    css = """
+CSS = """
 :root{
   color-scheme: light;
   --plane:#f4f4f1; --surface:#fcfcfb; --raised:#ffffff;
@@ -575,6 +558,24 @@ footer{border-top:1px solid var(--rule-strong);margin-top:56px;padding-top:22px;
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 """
 
+
+def build(benign, toxic, out_path):
+    hz = benign["horizon"]
+    b_arms, t_arms = benign["arms"], toxic["arms"]
+    b_by = {a["name"]: a for a in b_arms}
+    t_by = {a["name"]: a for a in t_arms}
+    rec_b = b_by["robust / adaptive-ref"]
+    rec_t = t_by["ramm / adaptive-phi"]
+
+    eq_b, pay_b = line_chart(b_arms, chart_id="eqb", horizon=hz)
+    eq_t, pay_t = line_chart(t_arms, chart_id="eqt", horizon=hz)
+
+    def attr(a):
+        m = a["metrics"]
+        return {k: m[k] for k in ("spread_capture", "adverse_selection",
+                                  "inventory_pnl", "liquidation")}
+
+
     def stat(k, v, note, cls=""):
         return (f'<div class="stat"><div class="stat-k">{esc(k)}</div>'
                 f'<div class="stat-v {cls}">{v}</div><div class="stat-n">{esc(note)}</div></div>')
@@ -585,7 +586,7 @@ footer{border-top:1px solid var(--rule-strong);margin-top:56px;padding-top:22px;
 
     h = []
     h.append(f"<title>Dealer Market Making Tearsheet</title>")
-    h.append(f"<style>{css}</style>")
+    h.append(f"<style>{CSS}</style>")
     h.append('<div class="wrap">')
 
     h.append(f"""<header>

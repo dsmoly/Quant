@@ -1,0 +1,352 @@
+<title>Taker or Maker</title>
+<style>
+:root{
+  color-scheme: light;
+  --plane:#f4f4f1; --surface:#fcfcfb; --raised:#ffffff;
+  --ink:#14161a; --ink-2:#4e535e; --ink-3:#868c99;
+  --rule:#e2e2dd; --rule-strong:#cfcfc9;
+  --accent:#2a78d6; --good:#0ca30c; --bad:#d03b3b;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+  --fan-outer:rgba(42,120,214,.14); --fan-inner:rgba(42,120,214,.28);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --raised:#212120;
+    --ink:#f4f4f0; --ink-2:#b4b4ab; --ink-3:#82827a;
+    --rule:#2e2e2c; --rule-strong:#3d3d3a;
+    --accent:#3987e5; --good:#0ca30c; --bad:#d03b3b;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    --fan-outer:rgba(57,135,229,.18); --fan-inner:rgba(57,135,229,.34);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --plane:#0d0d0d; --surface:#1a1a19; --raised:#212120;
+  --ink:#f4f4f0; --ink-2:#b4b4ab; --ink-3:#82827a;
+  --rule:#2e2e2c; --rule-strong:#3d3d3a;
+  --accent:#3987e5; --good:#0ca30c; --bad:#d03b3b;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+  --fan-outer:rgba(57,135,229,.18); --fan-inner:rgba(57,135,229,.34);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--plane); color:var(--ink);
+  font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.mono,.num,.tick,.endval,.barval,.stat-v,.rowval{
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-variant-numeric:tabular-nums;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:48px 24px 80px}
+
+header{border-bottom:1px solid var(--rule-strong);padding-bottom:28px;margin-bottom:40px}
+.eyebrow{
+  font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:600;margin:0 0 12px;
+}
+h1{font-size:clamp(28px,4vw,40px);line-height:1.1;margin:0 0 12px;
+   letter-spacing:-.02em;text-wrap:balance;font-weight:650}
+.lede{font-size:17px;color:var(--ink-2);max-width:62ch;margin:0 0 20px}
+.runmeta{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;
+  padding:4px 10px;border:1px solid var(--rule-strong);border-radius:3px;
+  color:var(--ink-2);background:var(--surface);
+}
+
+section{margin:0 0 56px}
+h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+   font-weight:650;margin:0 0 6px;padding-bottom:10px;border-bottom:1px solid var(--rule)}
+h3{font-size:18px;margin:32px 0 4px;font-weight:620;letter-spacing:-.01em}
+h4{font-size:13px;margin:0 0 14px;font-weight:600;color:var(--ink-2)}
+p{margin:14px 0;max-width:72ch}
+.sub{color:var(--ink-2);font-size:14px;margin-top:6px}
+
+.statrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);margin:24px 0 8px}
+.stat{background:var(--surface);padding:18px 20px}
+.stat-k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:600;margin-bottom:8px}
+.stat-v{font-size:26px;font-weight:600;line-height:1.1;letter-spacing:-.02em}
+.stat-n{font-size:12px;color:var(--ink-3);margin-top:6px}
+.good{color:var(--good)} .bad{color:var(--bad)}
+
+.card{background:var(--surface);border:1px solid var(--rule);padding:22px 24px 18px;margin:22px 0}
+.card-2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:840px){.card-2{grid-template-columns:1fr}}
+
+.chart{width:100%;height:auto;display:block;overflow:visible}
+.grid{stroke:var(--rule);stroke-width:1}
+.zero{stroke:var(--rule-strong);stroke-width:1.5}
+.tick{fill:var(--ink-3);font-size:11px;text-anchor:middle}
+.tick-y{text-anchor:end}
+.ln{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.dot{stroke:var(--surface);stroke-width:2}
+.endlab{fill:var(--ink-2);font-size:11px;font-weight:500;dominant-baseline:middle}
+.leader{stroke:var(--rule-strong);stroke-width:1;fill:none}
+.endval{fill:var(--ink);font-family:ui-monospace,Menlo,monospace;font-weight:600}
+.anchor-end{text-anchor:end}
+.s1{stroke:var(--s1)} .s2{stroke:var(--s2)} .s3{stroke:var(--s3)}
+.s4{stroke:var(--s4)} .s5{stroke:var(--s5)}
+circle.s1,rect.s1{fill:var(--s1);stroke:none} circle.s2,rect.s2{fill:var(--s2);stroke:none}
+circle.s3,rect.s3{fill:var(--s3);stroke:none} circle.s4,rect.s4{fill:var(--s4);stroke:none}
+circle.s5,rect.s5{fill:var(--s5);stroke:none}
+.crosshair{stroke:var(--ink-3);stroke-width:1;pointer-events:none}
+.hit{cursor:crosshair}
+.fan-outer{fill:var(--fan-outer);stroke:none}
+.fan-inner{fill:var(--fan-inner);stroke:none}
+.bar-pos{fill:var(--s1)} .bar-neg{fill:var(--bad)} .bar-net{fill:var(--ink-2)}
+.barval{fill:var(--ink-2);font-size:11px;text-anchor:middle;font-weight:600}
+.barval.strong{fill:var(--ink);font-size:12px}
+.barlab{fill:var(--ink-3);font-size:10px;text-anchor:middle}
+.rowlab{fill:var(--ink-2);font-size:12px;text-anchor:end}
+.rowval{font-size:11px;text-anchor:end;font-weight:600}
+.colhead{fill:var(--ink-3);font-size:10px;text-anchor:end;letter-spacing:.08em;text-transform:uppercase}
+.rowval.good{fill:var(--good)} .rowval.bad{fill:var(--bad)}
+.whisker{stroke:var(--rule-strong);stroke-width:1.5}
+.median{stroke:var(--surface);stroke-width:2}
+rect.box{stroke:none}
+
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;padding-top:14px;
+  border-top:1px solid var(--rule);font-size:12px;color:var(--ink-2)}
+.lg-item{display:inline-flex;align-items:center;gap:7px}
+.sw{width:11px;height:11px;border-radius:2px;display:inline-block;flex:none;margin-right:6px}
+.sw.s1{background:var(--s1)} .sw.s2{background:var(--s2)} .sw.s3{background:var(--s3)}
+.sw.s4{background:var(--s4)} .sw.s5{background:var(--s5)}
+
+.tablewrap{overflow-x:auto;margin:18px 0;border:1px solid var(--rule);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:680px}
+th,td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap}
+th{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);
+   font-weight:600;background:var(--raised);position:sticky;top:0}
+th .sw{vertical-align:middle}
+.mlab{text-align:left;color:var(--ink-2);font-weight:500}
+td.num{font-size:12.5px}
+td.best{color:var(--ink);font-weight:680}
+.grouprow td{background:var(--raised);color:var(--ink-3);font-size:10.5px;font-weight:650;
+  letter-spacing:.1em;text-transform:uppercase;text-align:left}
+tbody tr:hover td{background:var(--raised)}
+
+.callout{border-left:3px solid var(--accent);background:var(--surface);padding:16px 20px;margin:24px 0}
+.callout.warn{border-left-color:var(--bad)}
+.callout h4{margin:0 0 6px;color:var(--ink);font-size:14px;font-weight:650}
+.callout p{margin:6px 0;font-size:14px;color:var(--ink-2)}
+.callout p:last-child{margin-bottom:0}
+ul{margin:14px 0;padding-left:20px;max-width:72ch;color:var(--ink-2)}
+li{margin:8px 0}
+li strong{color:var(--ink)}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9em;
+  background:var(--raised);padding:1px 5px;border-radius:3px;border:1px solid var(--rule)}
+.tt{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;z-index:50;
+  background:var(--raised);border:1px solid var(--rule-strong);padding:9px 11px;
+  font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.14);border-radius:3px;min-width:170px}
+.tt-t{font-family:ui-monospace,Menlo,monospace;color:var(--ink-3);font-size:11px;
+  margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid var(--rule)}
+.tt-r{display:flex;justify-content:space-between;gap:14px;padding:1.5px 0}
+.tt-n{display:inline-flex;align-items:center;color:var(--ink-2)}
+.tt-v{font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;
+  color:var(--ink);font-weight:600}
+footer{border-top:1px solid var(--rule-strong);margin-top:56px;padding-top:22px;
+  color:var(--ink-3);font-size:12.5px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.crossmark{stroke:var(--ink-3);stroke-width:1.5}
+.crosslab{fill:var(--ink-2);font-size:11px;text-anchor:middle;font-weight:600}
+.axislab{fill:var(--ink-3);font-size:11px;text-anchor:middle}
+.mirror{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:840px){.mirror{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+<p class="eyebrow">Backtest report · the same framework, pointed the other way</p>
+<h1>Taker or maker: which side of the spread should you be on?</h1>
+<p class="lede">The market-making strategy earned the spread and paid the post-fill
+drift. This turns it around: a directional trader that pays the spread to hold a
+position and earns that same drift. Both are built from the Cartea–Donnelly–Jaimungal
+robust control, run on identical paths, and swept across the one parameter that
+decides between them.</p>
+<div class="runmeta">
+<span class="chip">60 paths per point</span>
+<span class="chip">20-minute episodes</span>
+<span class="chip">common random numbers</span>
+<span class="chip">6 toxicity levels</span>
+<span class="chip">φ_α = 40</span>
+</div></header>
+<section><h2>The same control, pointed the other way</h2>
+<p>Keep the robust paper's machinery and change who is trading. The
+inner infimum over the drift is identical to the market-making case,</p>
+<p style="text-align:center"><code>inf_η { qη + (α−η)²/(2φ_α σ²) } = qα − ½ φ_α σ² q²</code>,
+at <code>η* = α − φ_α σ² q</code></p>
+<p>so ambiguity about the drift is once again exactly a running penalty on the
+position held. With quadratic impact <code>k</code>, the ergodic
+Hamilton–Jacobi–Bellman equation is solved <em>exactly</em> by a quadratic ansatz
+(the residual is zero to 1e-12 across the whole state space, which the tests
+assert), and everything the strategy does drops out of three numbers:</p>
+<p style="text-align:center"><code>h₂ = −√(2k φ_α σ²)&nbsp;&nbsp;&nbsp;
+ρ = −h₂/2k&nbsp;&nbsp;&nbsp; h₁ = 1/(β+ρ)</code></p>
+<p style="text-align:center"><code>target q*(α) = α/((β+ρ)|h₂|)&nbsp;&nbsp;&nbsp;
+no-trade band b = c/|h₂|</code></p>
+<ul>
+<li><strong>φ_α becomes the position-sizing knob.</strong> The target scales as
+1/√φ_α — distrust your own drift estimate more, bet less. At φ_α → 0 the position
+diverges, which is the correct statement that a risk-neutral trader with a real
+edge and no penalty would take an unbounded one.</li>
+<li><strong>Volatility targeting falls out</strong> rather than being bolted on:
+q* scales as 1/σ.</li>
+<li><strong>A signal that decays faster than you can trade into it is worth less</strong>,
+through the (β+ρ) discount.</li>
+<li><strong>The trade-or-not decision does not depend on risk appetite at all.</strong>
+Combining the two expressions, the strategy trades from flat only when
+<code>|α| &gt; c(β+ρ)</code>. Risk appetite sets how big the bet is; whether it is
+worth doing at all is a question about the signal and the spread.</li>
+</ul>
+<div class="callout"><h4>Where the dealer-market paper enters</h4>
+<p>The band is proportional to the half-spread actually quoted, which is the
+mean-field population quote μ. When dealers sit wide of the Nash level, crossing
+costs more, the band widens, and the trader does less. That channel is mechanical
+— it is the price paid — rather than the regime switch the market-making
+experiments refuted.</p></div>
+</section>
+<section><h2>The crossover</h2>
+<p>The two strategies are opposite sides of one wedge. Sweeping the
+market-order impact ε — how far each trade moves the price, and so how large the
+drift on offer is — moves value from one to the other. Everything else is held
+fixed, and both run on the same paths.</p>
+<div class="card"><h3>Mean P&amp;L per episode</h3><h4>Directional trader against the market maker, same paths</h4><svg class="chart" viewBox="0 0 760 320" role="img" aria-label="Mean P&amp;L against market-order impact" data-chart="xpnl"><line class="grid" x1="58" y1="274.0" x2="642" y2="274.0"/><text class="tick tick-y" x="50" y="277.5">−3.1</text><line class="grid" x1="58" y1="223.6" x2="642" y2="223.6"/><text class="tick tick-y" x="50" y="227.1">3.0</text><line class="grid" x1="58" y1="173.2" x2="642" y2="173.2"/><text class="tick tick-y" x="50" y="176.7">9.1</text><line class="grid" x1="58" y1="122.8" x2="642" y2="122.8"/><text class="tick tick-y" x="50" y="126.3">15.2</text><line class="grid" x1="58" y1="72.4" x2="642" y2="72.4"/><text class="tick tick-y" x="50" y="75.9">21.3</text><line class="grid" x1="58" y1="22.0" x2="642" y2="22.0"/><text class="tick tick-y" x="50" y="25.5">27.4</text><line class="zero" x1="58" y1="248.4" x2="642" y2="248.4"/><text class="tick" x="58.0" y="292">0.001</text><text class="tick" x="174.8" y="292">0.003</text><text class="tick" x="291.6" y="292">0.006</text><text class="tick" x="408.4" y="292">0.01</text><text class="tick" x="525.2" y="292">0.015</text><text class="tick" x="642.0" y="292">0.025</text><text class="axislab" x="350.0" y="310">market-order impact ε</text><path class="ln s1" d="M58.0,250.3 L174.8,253.0 L291.6,245.4 L408.4,203.5 L525.2,138.0 L642.0,43.0"/><circle class="dot s1" cx="58.0" cy="250.3" r="3.5"><title>directional at ε=0.001: −0.226</title></circle><circle class="dot s1" cx="174.8" cy="253.0" r="3.5"><title>directional at ε=0.003: −0.555</title></circle><circle class="dot s1" cx="291.6" cy="245.4" r="3.5"><title>directional at ε=0.006: 0.370</title></circle><circle class="dot s1" cx="408.4" cy="203.5" r="3.5"><title>directional at ε=0.01: 5.429</title></circle><circle class="dot s1" cx="525.2" cy="138.0" r="3.5"><title>directional at ε=0.015: 13.366</title></circle><circle class="dot s1" cx="642.0" cy="43.0" r="3.5"><title>directional at ε=0.025: 24.857</title></circle><text class="endlab" x="651.0" y="43.0">directional <tspan class="endval">24.86</tspan></text><path class="ln s2" d="M58.0,130.4 L174.8,151.5 L291.6,175.2 L408.4,200.2 L525.2,215.2 L642.0,241.3"/><circle class="dot s2" cx="58.0" cy="130.4" r="3.5"><title>market maker at ε=0.001: 14.278</title></circle><circle class="dot s2" cx="174.8" cy="151.5" r="3.5"><title>market maker at ε=0.003: 11.722</title></circle><circle class="dot s2" cx="291.6" cy="175.2" r="3.5"><title>market maker at ε=0.006: 8.863</title></circle><circle class="dot s2" cx="408.4" cy="200.2" r="3.5"><title>market maker at ε=0.01: 5.833</title></circle><circle class="dot s2" cx="525.2" cy="215.2" r="3.5"><title>market maker at ε=0.015: 4.019</title></circle><circle class="dot s2" cx="642.0" cy="241.3" r="3.5"><title>market maker at ε=0.025: 0.857</title></circle><text class="endlab" x="651.0" y="241.3">market maker <tspan class="endval">0.86</tspan></text><line class="crossmark" x1="413.2" y1="22" x2="413.2" y2="274"/><text class="crosslab" x="413.2" y="16">crossover ε≈0.010</text></svg><div class="legend"><span class="lg-item"><span class="sw s1"></span>directional (taker)</span><span class="lg-item"><span class="sw s2"></span>market maker</span></div></div>
+<div class="card"><h3>Sharpe ratio per episode</h3><h4>Risk-adjusted, same sweep</h4><svg class="chart" viewBox="0 0 760 320" role="img" aria-label="Sharpe against market-order impact" data-chart="xshp"><line class="grid" x1="58" y1="274.0" x2="642" y2="274.0"/><text class="tick tick-y" x="50" y="277.5">−1.6</text><line class="grid" x1="58" y1="223.6" x2="642" y2="223.6"/><text class="tick tick-y" x="50" y="227.1">0.6</text><line class="grid" x1="58" y1="173.2" x2="642" y2="173.2"/><text class="tick tick-y" x="50" y="176.7">2.8</text><line class="grid" x1="58" y1="122.8" x2="642" y2="122.8"/><text class="tick tick-y" x="50" y="126.3">5.0</text><line class="grid" x1="58" y1="72.4" x2="642" y2="72.4"/><text class="tick tick-y" x="50" y="75.9">7.2</text><line class="grid" x1="58" y1="22.0" x2="642" y2="22.0"/><text class="tick tick-y" x="50" y="25.5">9.4</text><line class="zero" x1="58" y1="238.1" x2="642" y2="238.1"/><text class="tick" x="58.0" y="292">0.001</text><text class="tick" x="174.8" y="292">0.003</text><text class="tick" x="291.6" y="292">0.006</text><text class="tick" x="408.4" y="292">0.01</text><text class="tick" x="525.2" y="292">0.015</text><text class="tick" x="642.0" y="292">0.025</text><text class="axislab" x="350.0" y="310">market-order impact ε</text><path class="ln s1" d="M58.0,253.0 L174.8,250.6 L291.6,234.9 L408.4,205.1 L525.2,176.4 L642.0,141.9"/><circle class="dot s1" cx="58.0" cy="253.0" r="3.5"><title>directional at ε=0.001: −0.646</title></circle><circle class="dot s1" cx="174.8" cy="250.6" r="3.5"><title>directional at ε=0.003: −0.543</title></circle><circle class="dot s1" cx="291.6" cy="234.9" r="3.5"><title>directional at ε=0.006: 0.141</title></circle><circle class="dot s1" cx="408.4" cy="205.1" r="3.5"><title>directional at ε=0.01: 1.432</title></circle><circle class="dot s1" cx="525.2" cy="176.4" r="3.5"><title>directional at ε=0.015: 2.681</title></circle><circle class="dot s1" cx="642.0" cy="141.9" r="3.5"><title>directional at ε=0.025: 4.180</title></circle><text class="endlab" x="651.0" y="141.9">directional <tspan class="endval">4.18</tspan></text><path class="ln s2" d="M58.0,43.0 L174.8,75.8 L291.6,105.0 L408.4,130.2 L525.2,164.2 L642.0,222.2"/><circle class="dot s2" cx="58.0" cy="43.0" r="3.5"><title>market maker at ε=0.001: 8.476</title></circle><circle class="dot s2" cx="174.8" cy="75.8" r="3.5"><title>market maker at ε=0.003: 7.052</title></circle><circle class="dot s2" cx="291.6" cy="105.0" r="3.5"><title>market maker at ε=0.006: 5.785</title></circle><circle class="dot s2" cx="408.4" cy="130.2" r="3.5"><title>market maker at ε=0.01: 4.687</title></circle><circle class="dot s2" cx="525.2" cy="164.2" r="3.5"><title>market maker at ε=0.015: 3.210</title></circle><circle class="dot s2" cx="642.0" cy="222.2" r="3.5"><title>market maker at ε=0.025: 0.692</title></circle><text class="endlab" x="651.0" y="222.2">market maker <tspan class="endval">0.69</tspan></text><line class="crossmark" x1="540.6" y1="22" x2="540.6" y2="274"/><text class="crosslab" x="540.6" y="16">crossover ε≈0.016</text></svg><div class="legend"><span class="lg-item"><span class="sw s1"></span>directional (taker)</span><span class="lg-item"><span class="sw s2"></span>market maker</span></div></div>
+<p class="sub">The lines cross at ε ≈ 0.010 on P&amp;L and ε ≈ 0.016 on Sharpe — the crossing points are computed from the sweep, not eyeballed. Below them the drift is too small to pay for the spread and the market maker wins comfortably; above them the same spread that protects the maker is the toll the taker gladly pays.</p>
+</section>
+<section><h2>Why it crosses: one number in two mirrors</h2>
+<p>The market maker's capture ratio — the share of quoted spread that
+survives markout — falls from 93% to 21% across this sweep. That lost spread does
+not vanish; it is what the taker is collecting. The P&amp;L attribution of the two
+strategies is the same decomposition with the signs exchanged.</p>
+<div class="mirror">
+<div class="card"><h3>Market maker, ε = 0.025</h3><h4>Earns the spread, pays the drift</h4><svg class="chart" viewBox="0 0 380 280" role="img" aria-label="P&amp;L attribution" data-chart="wfm"><line class="zero" x1="12" y1="222.0" x2="368" y2="222.0"/><rect class="bar-pos" x="26.2" y="43.4" width="42.7" height="178.6" rx="2"><title>Spread capture: +9.115</title></rect><text class="barval" x="47.6" y="38.4">+9.11</text><text class="barlab" x="47.6" y="236.0">Spread</text><text class="barlab" x="47.6" y="248.0">capture</text><rect class="bar-neg" x="97.4" y="43.4" width="42.7" height="142.0" rx="2"><title>Adverse selection: −7.247</title></rect><text class="barval" x="118.8" y="38.4">−7.25</text><text class="barlab" x="118.8" y="236.0">Adverse</text><text class="barlab" x="118.8" y="248.0">selection</text><rect class="bar-neg" x="168.6" y="185.4" width="42.7" height="19.8" rx="2"><title>Inventory P&amp;L: −1.011</title></rect><text class="barval" x="190.0" y="180.4">−1.01</text><text class="barlab" x="190.0" y="236.0">Inventory</text><text class="barlab" x="190.0" y="248.0">P&amp;L</text><rect class="bar-neg" x="239.8" y="205.2" width="42.7" height="1.2" rx="2"><title>Liquidation: −0.001</title></rect><text class="barval" x="261.2" y="200.2">−0.001</text><text class="barlab" x="261.2" y="236.0">Liquidation</text><text class="barlab" x="261.2" y="248.0"></text><rect class="bar-net" x="311.0" y="205.2" width="42.7" height="16.8" rx="2"><title>Net P&amp;L: 0.857</title></rect><text class="barval strong" x="332.4" y="200.2">0.86</text><text class="barlab" x="332.4" y="236.0">Net</text><text class="barlab" x="332.4" y="248.0">P&amp;L</text></svg></div>
+<div class="card"><h3>Directional trader, ε = 0.025</h3><h4>Pays the spread, earns the drift</h4><svg class="chart" viewBox="0 0 380 280" role="img" aria-label="P&amp;L attribution" data-chart="wfd"><line class="zero" x1="12" y1="222.0" x2="368" y2="222.0"/><rect class="bar-pos" x="26.2" y="222.0" width="42.7" height="138.3" rx="2"><title>Spread capture: −19.247</title></rect><text class="barval" x="47.6" y="217.0">−19.25</text><text class="barlab" x="47.6" y="236.0">Spread</text><text class="barlab" x="47.6" y="248.0">capture</text><rect class="bar-neg" x="97.4" y="60.5" width="42.7" height="299.7" rx="2"><title>Adverse selection: +41.724</title></rect><text class="barval" x="118.8" y="55.5">+41.72</text><text class="barlab" x="118.8" y="236.0">Adverse</text><text class="barlab" x="118.8" y="248.0">selection</text><rect class="bar-pos" x="168.6" y="43.4" width="42.7" height="17.1" rx="2"><title>Inventory P&amp;L: +2.380</title></rect><text class="barval" x="190.0" y="38.4">+2.38</text><text class="barlab" x="190.0" y="236.0">Inventory</text><text class="barlab" x="190.0" y="248.0">P&amp;L</text><rect class="bar-neg" x="239.8" y="43.4" width="42.7" height="1.2" rx="2"><title>Liquidation: −0.001</title></rect><text class="barval" x="261.2" y="38.4">−0.001</text><text class="barlab" x="261.2" y="236.0">Liquidation</text><text class="barlab" x="261.2" y="248.0"></text><rect class="bar-net" x="311.0" y="43.4" width="42.7" height="178.6" rx="2"><title>Net P&amp;L: 24.857</title></rect><text class="barval strong" x="332.4" y="38.4">24.86</text><text class="barlab" x="332.4" y="236.0">Net</text><text class="barlab" x="332.4" y="248.0">P&amp;L</text></svg></div>
+</div>
+<p class="sub">At ε = 0.025 the maker's gross spread capture is
+9.11 against a markout cost of
+7.25; the taker's spread
+capture is −19.25 — negative,
+because it is paying — against a markout of
+−41.72, negative in the
+attribution because the drift is working for it rather than against.</p>
+</section>
+<section><h2>Equity curves</h2>
+<div class="card"><h3>Below the crossover — ε = 0.001</h3><h4>The papers' own calibration: the signal cannot pay for the spread</h4><svg class="chart" viewBox="0 0 760 300" role="img" aria-label="Equity curves" data-chart="eqlo"><line class="grid" x1="56" y1="266.0" x2="632" y2="266.0"/><text class="tick tick-y" x="48" y="269.5">−7.7</text><line class="grid" x1="56" y1="216.0" x2="632" y2="216.0"/><text class="tick tick-y" x="48" y="219.5">−6.0</text><line class="grid" x1="56" y1="166.0" x2="632" y2="166.0"/><text class="tick tick-y" x="48" y="169.5">−4.4</text><line class="grid" x1="56" y1="116.0" x2="632" y2="116.0"/><text class="tick tick-y" x="48" y="119.5">−2.7</text><line class="grid" x1="56" y1="66.0" x2="632" y2="66.0"/><text class="tick tick-y" x="48" y="69.5">−1.1</text><line class="grid" x1="56" y1="16.0" x2="632" y2="16.0"/><text class="tick tick-y" x="48" y="19.5">0.6</text><text class="tick" x="56.0" y="284">0m</text><text class="tick" x="200.0" y="284">5m</text><text class="tick" x="344.0" y="284">10m</text><text class="tick" x="488.0" y="284">15m</text><text class="tick" x="632.0" y="284">20m</text><line class="zero" x1="56" y1="33.5" x2="632" y2="33.5"/><path class="ln s1" d="M56.0,33.5 L59.9,33.5 L63.7,33.7 L67.6,33.7 L71.5,33.8 L75.3,33.8 L79.2,34.1 L83.1,34.3 L86.9,34.7 L90.8,35.0 L94.7,35.4 L98.5,35.8 L102.4,35.8 L106.3,36.0 L110.1,36.1 L114.0,36.2 L117.9,36.4 L121.7,36.9 L125.6,37.1 L129.4,37.3 L133.3,37.5 L137.2,37.7 L141.0,37.9 L144.9,38.0 L148.8,38.1 L152.6,38.1 L156.5,38.1 L160.4,38.1 L164.2,38.0 L168.1,38.1 L172.0,38.2 L175.8,38.1 L179.7,38.2 L183.6,38.3 L187.4,38.4 L191.3,38.4 L195.2,38.3 L199.0,38.3 L202.9,38.4 L206.8,38.5 L210.6,38.4 L214.5,38.5 L218.4,38.6 L222.2,38.6 L226.1,38.6 L230.0,38.6 L233.8,38.7 L237.7,38.8 L241.6,38.8 L245.4,38.7 L249.3,38.7 L253.2,38.7 L257.0,38.7 L260.9,38.8 L264.8,38.8 L268.6,38.9 L272.5,39.0 L276.3,39.0 L280.2,39.0 L284.1,39.0 L287.9,39.1 L291.8,39.1 L295.7,39.1 L299.5,39.1 L303.4,39.0 L307.3,39.1 L311.1,39.1 L315.0,39.2 L318.9,39.3 L322.7,39.3 L326.6,39.2 L330.5,39.2 L334.3,39.2 L338.2,39.2 L342.1,39.2 L345.9,39.2 L349.8,39.3 L353.7,39.2 L357.5,39.5 L361.4,39.5 L365.3,39.6 L369.1,39.7 L373.0,39.6 L376.9,39.6 L380.7,39.7 L384.6,39.6 L388.5,39.7 L392.3,39.6 L396.2,39.6 L400.1,39.7 L403.9,39.7 L407.8,39.6 L411.7,39.6 L415.5,39.6 L419.4,39.6 L423.2,39.5 L427.1,39.7 L431.0,39.7 L434.8,39.8 L438.7,39.8 L442.6,39.8 L446.4,39.8 L450.3,39.8 L454.2,39.9 L458.0,39.9 L461.9,39.8 L465.8,39.7 L469.6,39.8 L473.5,39.8 L477.4,39.8 L481.2,39.8 L485.1,39.8 L489.0,39.7 L492.8,39.8 L496.7,39.7 L500.6,39.8 L504.4,39.9 L508.3,39.9 L512.2,39.9 L516.0,40.0 L519.9,40.0 L523.8,40.0 L527.6,40.0 L531.5,40.0 L535.4,40.1 L539.2,40.1 L543.1,40.2 L547.0,40.2 L550.8,40.2 L554.7,40.2 L558.6,40.4 L562.4,40.3 L566.3,40.5 L570.1,40.5 L574.0,40.5 L577.9,40.4 L581.7,40.4 L585.6,40.5 L589.5,40.4 L593.3,40.4 L597.2,40.5 L601.1,40.4 L604.9,40.4 L608.8,40.5 L612.7,40.4 L616.5,40.4 L620.4,40.5 L624.3,40.4 L628.1,40.4 L632.0,40.4"/><circle class="dot s1" cx="632.0" cy="40.4" r="3.5"/><path class="ln s2" d="M56.0,33.5 L59.9,33.5 L63.7,33.7 L67.6,33.7 L71.5,33.7 L75.3,33.7 L79.2,34.0 L83.1,34.2 L86.9,34.6 L90.8,34.8 L94.7,35.4 L98.5,36.0 L102.4,36.0 L106.3,36.1 L110.1,36.2 L114.0,36.4 L117.9,36.7 L121.7,37.0 L125.6,37.1 L129.4,37.2 L133.3,37.2 L137.2,37.6 L141.0,37.7 L144.9,37.9 L148.8,37.9 L152.6,38.1 L156.5,38.1 L160.4,38.3 L164.2,38.4 L168.1,38.4 L172.0,38.5 L175.8,38.6 L179.7,38.8 L183.6,38.8 L187.4,38.9 L191.3,39.0 L195.2,39.1 L199.0,39.1 L202.9,39.3 L206.8,39.5 L210.6,39.8 L214.5,40.0 L218.4,40.0 L222.2,40.0 L226.1,40.0 L230.0,40.1 L233.8,40.2 L237.7,40.2 L241.6,40.3 L245.4,40.4 L249.3,40.4 L253.2,40.5 L257.0,40.5 L260.9,40.5 L264.8,40.5 L268.6,40.5 L272.5,40.7 L276.3,40.7 L280.2,40.7 L284.1,40.7 L287.9,40.7 L291.8,40.7 L295.7,40.8 L299.5,40.9 L303.4,41.1 L307.3,41.0 L311.1,41.1 L315.0,41.0 L318.9,41.0 L322.7,41.1 L326.6,41.1 L330.5,41.1 L334.3,41.4 L338.2,41.3 L342.1,41.4 L345.9,41.6 L349.8,41.7 L353.7,41.9 L357.5,42.2 L361.4,42.2 L365.3,42.2 L369.1,42.2 L373.0,42.2 L376.9,42.2 L380.7,42.2 L384.6,42.3 L388.5,42.3 L392.3,42.5 L396.2,42.6 L400.1,42.7 L403.9,42.7 L407.8,42.9 L411.7,43.0 L415.5,43.1 L419.4,43.0 L423.2,43.2 L427.1,43.3 L431.0,43.3 L434.8,43.2 L438.7,43.3 L442.6,43.3 L446.4,43.4 L450.3,43.4 L454.2,43.4 L458.0,43.5 L461.9,43.5 L465.8,43.6 L469.6,43.6 L473.5,43.5 L477.4,43.6 L481.2,43.6 L485.1,43.7 L489.0,43.8 L492.8,43.7 L496.7,43.8 L500.6,43.8 L504.4,43.8 L508.3,43.9 L512.2,43.9 L516.0,43.8 L519.9,43.8 L523.8,43.8 L527.6,43.8 L531.5,43.8 L535.4,43.8 L539.2,43.8 L543.1,43.7 L547.0,43.7 L550.8,43.8 L554.7,43.8 L558.6,43.7 L562.4,43.7 L566.3,43.7 L570.1,43.8 L574.0,43.8 L577.9,43.9 L581.7,43.9 L585.6,43.9 L589.5,43.9 L593.3,43.9 L597.2,43.9 L601.1,44.0 L604.9,44.0 L608.8,44.0 L612.7,44.0 L616.5,44.1 L620.4,44.1 L624.3,44.1 L628.1,44.1 L632.0,44.2"/><circle class="dot s2" cx="632.0" cy="44.2" r="3.5"/><path class="ln s5" d="M56.0,33.5 L59.9,33.5 L63.7,33.6 L67.6,33.6 L71.5,33.8 L75.3,33.8 L79.2,37.6 L83.1,38.1 L86.9,40.8 L90.8,41.6 L94.7,44.7 L98.5,48.9 L102.4,51.6 L106.3,52.7 L110.1,54.4 L114.0,55.4 L117.9,57.8 L121.7,60.5 L125.6,65.1 L129.4,68.3 L133.3,74.7 L137.2,77.3 L141.0,81.7 L144.9,85.6 L148.8,88.1 L152.6,90.0 L156.5,93.2 L160.4,96.0 L164.2,98.9 L168.1,100.6 L172.0,102.3 L175.8,103.6 L179.7,106.0 L183.6,109.3 L187.4,112.1 L191.3,114.6 L195.2,116.9 L199.0,117.9 L202.9,120.2 L206.8,121.8 L210.6,124.2 L214.5,126.4 L218.4,127.7 L222.2,131.2 L226.1,132.2 L230.0,133.6 L233.8,135.0 L237.7,137.5 L241.6,138.6 L245.4,139.5 L249.3,140.5 L253.2,141.1 L257.0,143.1 L260.9,144.7 L264.8,146.5 L268.6,147.8 L272.5,149.5 L276.3,150.5 L280.2,151.8 L284.1,153.2 L287.9,154.0 L291.8,154.6 L295.7,155.3 L299.5,156.5 L303.4,158.1 L307.3,160.5 L311.1,162.1 L315.0,163.7 L318.9,164.9 L322.7,165.9 L326.6,166.6 L330.5,168.9 L334.3,170.2 L338.2,171.2 L342.1,172.7 L345.9,174.1 L349.8,176.0 L353.7,177.2 L357.5,178.2 L361.4,179.7 L365.3,180.3 L369.1,181.8 L373.0,183.1 L376.9,184.1 L380.7,185.2 L384.6,186.7 L388.5,187.7 L392.3,190.4 L396.2,191.9 L400.1,194.0 L403.9,194.9 L407.8,196.4 L411.7,198.5 L415.5,199.4 L419.4,200.2 L423.2,201.0 L427.1,202.0 L431.0,202.8 L434.8,203.6 L438.7,204.1 L442.6,205.4 L446.4,206.1 L450.3,206.6 L454.2,207.5 L458.0,208.2 L461.9,209.5 L465.8,210.1 L469.6,210.8 L473.5,211.4 L477.4,212.0 L481.2,213.3 L485.1,214.1 L489.0,215.3 L492.8,216.7 L496.7,218.1 L500.6,219.0 L504.4,219.6 L508.3,220.4 L512.2,221.4 L516.0,222.4 L519.9,223.1 L523.8,224.3 L527.6,225.2 L531.5,226.5 L535.4,228.5 L539.2,229.6 L543.1,230.5 L547.0,230.9 L550.8,231.4 L554.7,231.8 L558.6,233.2 L562.4,234.1 L566.3,235.7 L570.1,237.1 L574.0,238.7 L577.9,239.6 L581.7,240.5 L585.6,241.4 L589.5,242.1 L593.3,243.6 L597.2,244.5 L601.1,244.9 L604.9,245.6 L608.8,246.5 L612.7,247.1 L616.5,247.6 L620.4,247.8 L624.3,248.2 L628.1,248.6 L632.0,248.8"/><circle class="dot s5" cx="632.0" cy="248.8" r="3.5"/><path class="ln s3" d="M56.0,33.5 L59.9,34.3 L63.7,34.4 L67.6,34.4 L71.5,34.3 L75.3,34.3 L79.2,34.4 L83.1,34.5 L86.9,34.6 L90.8,34.6 L94.7,34.4 L98.5,34.4 L102.4,34.4 L106.3,34.6 L110.1,34.6 L114.0,34.6 L117.9,34.7 L121.7,34.5 L125.6,34.5 L129.4,34.3 L133.3,34.3 L137.2,34.4 L141.0,34.3 L144.9,34.5 L148.8,34.3 L152.6,34.1 L156.5,34.1 L160.4,34.1 L164.2,34.1 L168.1,34.0 L172.0,34.2 L175.8,34.0 L179.7,34.0 L183.6,34.0 L187.4,33.9 L191.3,33.9 L195.2,33.8 L199.0,33.7 L202.9,33.6 L206.8,33.7 L210.6,33.7 L214.5,33.6 L218.4,33.9 L222.2,34.0 L226.1,34.0 L230.0,34.0 L233.8,33.9 L237.7,34.0 L241.6,33.9 L245.4,33.8 L249.3,33.8 L253.2,34.1 L257.0,34.3 L260.9,34.3 L264.8,34.4 L268.6,34.3 L272.5,34.3 L276.3,34.5 L280.2,34.5 L284.1,34.6 L287.9,34.5 L291.8,34.6 L295.7,34.4 L299.5,34.5 L303.4,34.8 L307.3,34.5 L311.1,34.5 L315.0,34.6 L318.9,34.4 L322.7,34.5 L326.6,34.2 L330.5,34.1 L334.3,34.0 L338.2,33.9 L342.1,33.9 L345.9,33.8 L349.8,33.7 L353.7,33.7 L357.5,33.8 L361.4,33.9 L365.3,33.9 L369.1,33.9 L373.0,34.0 L376.9,33.9 L380.7,34.1 L384.6,34.0 L388.5,34.0 L392.3,33.9 L396.2,33.9 L400.1,34.0 L403.9,33.8 L407.8,33.8 L411.7,34.0 L415.5,34.1 L419.4,34.2 L423.2,34.1 L427.1,34.0 L431.0,33.9 L434.8,33.9 L438.7,34.0 L442.6,34.1 L446.4,34.0 L450.3,34.2 L454.2,34.2 L458.0,34.5 L461.9,34.4 L465.8,34.3 L469.6,34.5 L473.5,34.4 L477.4,34.2 L481.2,34.3 L485.1,34.1 L489.0,34.0 L492.8,34.0 L496.7,33.9 L500.6,33.7 L504.4,33.7 L508.3,33.8 L512.2,34.0 L516.0,34.0 L519.9,33.9 L523.8,34.0 L527.6,33.9 L531.5,34.0 L535.4,33.9 L539.2,34.0 L543.1,34.0 L547.0,34.0 L550.8,34.0 L554.7,33.9 L558.6,33.9 L562.4,33.9 L566.3,34.0 L570.1,34.1 L574.0,34.0 L577.9,34.1 L581.7,34.2 L585.6,34.1 L589.5,34.2 L593.3,34.0 L597.2,33.8 L601.1,33.6 L604.9,33.5 L608.8,33.3 L612.7,33.2 L616.5,33.3 L620.4,33.3 L624.3,33.5 L628.1,33.6 L632.0,33.5"/><circle class="dot s3" cx="632.0" cy="33.5" r="3.5"/><path class="ln s4" d="M56.0,33.5 L59.9,33.5 L63.7,33.5 L67.6,33.5 L71.5,33.5 L75.3,33.5 L79.2,33.5 L83.1,33.5 L86.9,33.5 L90.8,33.5 L94.7,33.5 L98.5,33.5 L102.4,33.5 L106.3,33.5 L110.1,33.5 L114.0,33.5 L117.9,33.5 L121.7,33.5 L125.6,33.5 L129.4,33.5 L133.3,33.5 L137.2,33.5 L141.0,33.5 L144.9,33.5 L148.8,33.5 L152.6,33.5 L156.5,33.5 L160.4,33.5 L164.2,33.5 L168.1,33.5 L172.0,33.5 L175.8,33.5 L179.7,33.5 L183.6,33.5 L187.4,33.5 L191.3,33.5 L195.2,33.5 L199.0,33.5 L202.9,33.5 L206.8,33.5 L210.6,33.5 L214.5,33.5 L218.4,33.5 L222.2,33.5 L226.1,33.5 L230.0,33.5 L233.8,33.5 L237.7,33.5 L241.6,33.5 L245.4,33.5 L249.3,33.5 L253.2,33.5 L257.0,33.5 L260.9,33.5 L264.8,33.5 L268.6,33.5 L272.5,33.5 L276.3,33.5 L280.2,33.5 L284.1,33.5 L287.9,33.5 L291.8,33.5 L295.7,33.5 L299.5,33.5 L303.4,33.5 L307.3,33.5 L311.1,33.5 L315.0,33.5 L318.9,33.5 L322.7,33.5 L326.6,33.5 L330.5,33.5 L334.3,33.5 L338.2,33.5 L342.1,33.5 L345.9,33.5 L349.8,33.5 L353.7,33.5 L357.5,33.5 L361.4,33.5 L365.3,33.5 L369.1,33.5 L373.0,33.5 L376.9,33.5 L380.7,33.5 L384.6,33.5 L388.5,33.5 L392.3,33.5 L396.2,33.5 L400.1,33.5 L403.9,33.5 L407.8,33.5 L411.7,33.5 L415.5,33.5 L419.4,33.5 L423.2,33.5 L427.1,33.5 L431.0,33.5 L434.8,33.5 L438.7,33.5 L442.6,33.5 L446.4,33.5 L450.3,33.5 L454.2,33.5 L458.0,33.5 L461.9,33.5 L465.8,33.5 L469.6,33.5 L473.5,33.5 L477.4,33.5 L481.2,33.5 L485.1,33.5 L489.0,33.5 L492.8,33.5 L496.7,33.5 L500.6,33.5 L504.4,33.5 L508.3,33.5 L512.2,33.5 L516.0,33.5 L519.9,33.5 L523.8,33.5 L527.6,33.5 L531.5,33.5 L535.4,33.5 L539.2,33.5 L543.1,33.5 L547.0,33.5 L550.8,33.5 L554.7,33.5 L558.6,33.5 L562.4,33.5 L566.3,33.5 L570.1,33.5 L574.0,33.5 L577.9,33.5 L581.7,33.5 L585.6,33.5 L589.5,33.5 L593.3,33.5 L597.2,33.5 L601.1,33.5 L604.9,33.5 L608.8,33.5 L612.7,33.5 L616.5,33.5 L620.4,33.5 L624.3,33.5 L628.1,33.5 L632.0,33.5"/><circle class="dot s4" cx="632.0" cy="33.5" r="3.5"/><text class="endlab" x="641.0" y="33.5">buy-hold <tspan class="endval">0.00</tspan></text><text class="endlab" x="641.0" y="48.5">flat <tspan class="endval">0.00</tspan></text><text class="endlab" x="641.0" y="63.5">live <tspan class="endval">−0.22</tspan></text><text class="endlab" x="641.0" y="78.5">inverted <tspan class="endval">−0.35</tspan></text><text class="endlab" x="641.0" y="248.8">shuffled <tspan class="endval">−7.09</tspan></text></svg><div class="legend"><span class="lg-item"><span class="sw s1"></span>live signal</span><span class="lg-item"><span class="sw s2"></span>inverted</span><span class="lg-item"><span class="sw s5"></span>shuffled</span><span class="lg-item"><span class="sw s3"></span>buy &amp; hold</span><span class="lg-item"><span class="sw s4"></span>flat</span></div></div>
+<div class="card"><h3>Above the crossover — ε = 0.025</h3><h4>The same code, unchanged, on a market where the drift is large</h4><svg class="chart" viewBox="0 0 760 300" role="img" aria-label="Equity curves" data-chart="eqhi"><line class="grid" x1="56" y1="266.0" x2="632" y2="266.0"/><text class="tick tick-y" x="48" y="269.5">−108.2</text><line class="grid" x1="56" y1="216.0" x2="632" y2="216.0"/><text class="tick tick-y" x="48" y="219.5">−79.7</text><line class="grid" x1="56" y1="166.0" x2="632" y2="166.0"/><text class="tick tick-y" x="48" y="169.5">−51.1</text><line class="grid" x1="56" y1="116.0" x2="632" y2="116.0"/><text class="tick tick-y" x="48" y="119.5">−22.5</text><line class="grid" x1="56" y1="66.0" x2="632" y2="66.0"/><text class="tick tick-y" x="48" y="69.5">6.1</text><line class="grid" x1="56" y1="16.0" x2="632" y2="16.0"/><text class="tick tick-y" x="48" y="19.5">34.7</text><text class="tick" x="56.0" y="284">0m</text><text class="tick" x="200.0" y="284">5m</text><text class="tick" x="344.0" y="284">10m</text><text class="tick" x="488.0" y="284">15m</text><text class="tick" x="632.0" y="284">20m</text><line class="zero" x1="56" y1="76.7" x2="632" y2="76.7"/><path class="ln s1" d="M56.0,76.7 L59.9,76.7 L63.7,76.6 L67.6,76.6 L71.5,76.7 L75.3,76.6 L79.2,76.6 L83.1,76.5 L86.9,76.4 L90.8,76.1 L94.7,75.7 L98.5,75.5 L102.4,75.2 L106.3,75.1 L110.1,74.9 L114.0,74.7 L117.9,74.5 L121.7,74.1 L125.6,73.8 L129.4,73.3 L133.3,73.0 L137.2,72.8 L141.0,72.6 L144.9,72.3 L148.8,71.8 L152.6,71.5 L156.5,71.1 L160.4,70.9 L164.2,70.6 L168.1,70.2 L172.0,69.9 L175.8,69.6 L179.7,69.2 L183.6,69.0 L187.4,68.5 L191.3,68.1 L195.2,67.7 L199.0,67.4 L202.9,67.0 L206.8,66.7 L210.6,66.3 L214.5,66.0 L218.4,65.7 L222.2,65.5 L226.1,65.1 L230.0,64.8 L233.8,64.4 L237.7,64.1 L241.6,63.8 L245.4,63.5 L249.3,63.4 L253.2,63.2 L257.0,62.8 L260.9,62.5 L264.8,62.3 L268.6,62.0 L272.5,61.6 L276.3,61.5 L280.2,61.3 L284.1,60.9 L287.9,60.6 L291.8,60.2 L295.7,60.0 L299.5,59.6 L303.4,59.4 L307.3,59.1 L311.1,58.9 L315.0,58.7 L318.9,58.3 L322.7,58.2 L326.6,57.8 L330.5,57.5 L334.3,57.2 L338.2,56.9 L342.1,56.4 L345.9,56.1 L349.8,55.7 L353.7,55.3 L357.5,55.0 L361.4,54.7 L365.3,54.4 L369.1,54.0 L373.0,53.6 L376.9,53.4 L380.7,53.1 L384.6,52.9 L388.5,52.5 L392.3,52.1 L396.2,51.7 L400.1,51.4 L403.9,51.2 L407.8,50.9 L411.7,50.5 L415.5,50.2 L419.4,50.0 L423.2,49.7 L427.1,49.5 L431.0,49.1 L434.8,48.7 L438.7,48.5 L442.6,48.1 L446.4,47.8 L450.3,47.6 L454.2,47.4 L458.0,47.1 L461.9,46.7 L465.8,46.6 L469.6,46.2 L473.5,45.9 L477.4,45.6 L481.2,45.3 L485.1,45.0 L489.0,44.5 L492.8,44.1 L496.7,43.6 L500.6,43.4 L504.4,43.2 L508.3,42.8 L512.2,42.5 L516.0,42.2 L519.9,41.9 L523.8,41.6 L527.6,41.4 L531.5,41.1 L535.4,40.8 L539.2,40.5 L543.1,40.3 L547.0,40.0 L550.8,39.7 L554.7,39.4 L558.6,39.1 L562.4,38.9 L566.3,38.5 L570.1,38.3 L574.0,37.9 L577.9,37.6 L581.7,37.3 L585.6,37.0 L589.5,36.7 L593.3,36.5 L597.2,36.2 L601.1,35.9 L604.9,35.5 L608.8,35.2 L612.7,34.9 L616.5,34.5 L620.4,34.2 L624.3,33.8 L628.1,33.5 L632.0,33.2"/><circle class="dot s1" cx="632.0" cy="33.2" r="3.5"/><path class="ln s2" d="M56.0,76.7 L59.9,76.7 L63.7,76.8 L67.6,76.8 L71.5,76.9 L75.3,77.2 L79.2,77.3 L83.1,77.6 L86.9,77.9 L90.8,78.4 L94.7,79.1 L98.5,79.6 L102.4,79.9 L106.3,80.3 L110.1,80.6 L114.0,81.0 L117.9,81.5 L121.7,82.3 L125.6,83.2 L129.4,84.0 L133.3,84.6 L137.2,85.2 L141.0,85.8 L144.9,86.4 L148.8,87.3 L152.6,87.9 L156.5,88.6 L160.4,89.1 L164.2,89.6 L168.1,90.2 L172.0,90.8 L175.8,91.5 L179.7,92.1 L183.6,92.7 L187.4,93.7 L191.3,94.5 L195.2,95.2 L199.0,95.7 L202.9,96.6 L206.8,97.3 L210.6,98.1 L214.5,98.9 L218.4,99.5 L222.2,99.8 L226.1,100.5 L230.0,101.2 L233.8,101.9 L237.7,102.6 L241.6,103.1 L245.4,103.7 L249.3,104.1 L253.2,104.6 L257.0,105.5 L260.9,106.1 L264.8,106.6 L268.6,107.2 L272.5,107.9 L276.3,108.3 L280.2,108.6 L284.1,109.3 L287.9,109.9 L291.8,110.6 L295.7,111.2 L299.5,111.9 L303.4,112.5 L307.3,113.2 L311.1,113.9 L315.0,114.4 L318.9,115.1 L322.7,115.5 L326.6,116.1 L330.5,116.9 L334.3,117.6 L338.2,118.2 L342.1,119.0 L345.9,119.6 L349.8,120.3 L353.7,121.1 L357.5,121.9 L361.4,122.5 L365.3,123.1 L369.1,123.7 L373.0,124.4 L376.9,124.9 L380.7,125.5 L384.6,126.1 L388.5,126.8 L392.3,127.8 L396.2,128.6 L400.1,129.4 L403.9,130.0 L407.8,130.5 L411.7,131.3 L415.5,132.0 L419.4,132.5 L423.2,133.2 L427.1,133.8 L431.0,134.5 L434.8,135.2 L438.7,135.7 L442.6,136.3 L446.4,136.8 L450.3,137.3 L454.2,137.9 L458.0,138.6 L461.9,139.3 L465.8,139.9 L469.6,140.5 L473.5,141.1 L477.4,141.8 L481.2,142.6 L485.1,143.2 L489.0,144.4 L492.8,145.2 L496.7,146.1 L500.6,146.6 L504.4,147.1 L508.3,147.8 L512.2,148.5 L516.0,149.1 L519.9,149.7 L523.8,150.5 L527.6,150.9 L531.5,151.7 L535.4,152.5 L539.2,153.2 L543.1,153.8 L547.0,154.3 L550.8,155.1 L554.7,155.7 L558.6,156.3 L562.4,157.1 L566.3,158.0 L570.1,158.6 L574.0,159.3 L577.9,159.9 L581.7,160.6 L585.6,161.2 L589.5,161.7 L593.3,162.4 L597.2,163.1 L601.1,163.8 L604.9,164.7 L608.8,165.3 L612.7,166.0 L616.5,166.8 L620.4,167.4 L624.3,168.2 L628.1,168.7 L632.0,169.3"/><circle class="dot s2" cx="632.0" cy="169.3" r="3.5"/><path class="ln s5" d="M56.0,76.7 L59.9,76.7 L63.7,76.6 L67.6,76.7 L71.5,77.0 L75.3,77.6 L79.2,77.9 L83.1,78.1 L86.9,78.7 L90.8,79.4 L94.7,80.2 L98.5,80.8 L102.4,81.2 L106.3,81.9 L110.1,82.2 L114.0,82.6 L117.9,83.6 L121.7,84.7 L125.6,86.1 L129.4,87.0 L133.3,87.8 L137.2,89.1 L141.0,90.0 L144.9,91.1 L148.8,92.4 L152.6,93.3 L156.5,94.4 L160.4,95.3 L164.2,96.2 L168.1,97.1 L172.0,97.9 L175.8,99.0 L179.7,100.1 L183.6,101.1 L187.4,103.0 L191.3,104.2 L195.2,105.5 L199.0,106.5 L202.9,108.3 L206.8,109.6 L210.6,111.0 L214.5,112.3 L218.4,113.4 L222.2,114.3 L226.1,115.7 L230.0,116.9 L233.8,118.3 L237.7,119.9 L241.6,120.7 L245.4,121.5 L249.3,122.3 L253.2,123.7 L257.0,125.5 L260.9,126.8 L264.8,127.8 L268.6,129.8 L272.5,130.9 L276.3,132.0 L280.2,132.7 L284.1,133.8 L287.9,134.7 L291.8,135.9 L295.7,137.2 L299.5,138.6 L303.4,139.4 L307.3,141.3 L311.1,142.7 L315.0,143.9 L318.9,145.7 L322.7,146.5 L326.6,147.4 L330.5,148.8 L334.3,150.2 L338.2,151.2 L342.1,152.2 L345.9,153.1 L349.8,154.3 L353.7,155.5 L357.5,156.7 L361.4,157.9 L365.3,159.0 L369.1,160.1 L373.0,161.2 L376.9,162.2 L380.7,163.2 L384.6,164.1 L388.5,165.5 L392.3,167.2 L396.2,168.3 L400.1,169.9 L403.9,170.9 L407.8,172.1 L411.7,173.5 L415.5,175.2 L419.4,176.0 L423.2,177.2 L427.1,178.7 L431.0,180.1 L434.8,181.5 L438.7,182.2 L442.6,183.2 L446.4,184.2 L450.3,185.1 L454.2,186.1 L458.0,187.4 L461.9,189.4 L465.8,190.5 L469.6,191.8 L473.5,193.0 L477.4,194.3 L481.2,196.2 L485.1,197.3 L489.0,199.8 L492.8,201.4 L496.7,203.1 L500.6,203.8 L504.4,204.7 L508.3,206.2 L512.2,207.5 L516.0,208.5 L519.9,209.7 L523.8,211.4 L527.6,212.5 L531.5,214.1 L535.4,215.8 L539.2,217.0 L543.1,218.4 L547.0,219.4 L550.8,220.5 L554.7,221.7 L558.6,222.8 L562.4,224.7 L566.3,226.3 L570.1,228.0 L574.0,229.5 L577.9,230.7 L581.7,231.8 L585.6,233.2 L589.5,234.3 L593.3,235.5 L597.2,236.8 L601.1,238.3 L604.9,240.1 L608.8,241.1 L612.7,242.3 L616.5,244.2 L620.4,245.2 L624.3,246.6 L628.1,247.8 L632.0,248.8"/><circle class="dot s5" cx="632.0" cy="248.8" r="3.5"/><path class="ln s3" d="M56.0,76.7 L59.9,76.7 L63.7,76.7 L67.6,76.7 L71.5,76.8 L75.3,76.8 L79.2,76.8 L83.1,76.7 L86.9,76.7 L90.8,76.8 L94.7,76.7 L98.5,76.8 L102.4,76.8 L106.3,76.9 L110.1,76.9 L114.0,76.9 L117.9,76.8 L121.7,76.8 L125.6,76.8 L129.4,76.8 L133.3,76.8 L137.2,76.7 L141.0,76.7 L144.9,76.8 L148.8,76.7 L152.6,76.7 L156.5,76.7 L160.4,76.7 L164.2,76.8 L168.1,76.9 L172.0,76.9 L175.8,76.9 L179.7,76.9 L183.6,76.9 L187.4,76.8 L191.3,76.7 L195.2,76.6 L199.0,76.7 L202.9,76.7 L206.8,76.7 L210.6,76.6 L214.5,76.5 L218.4,76.6 L222.2,76.6 L226.1,76.6 L230.0,76.5 L233.8,76.5 L237.7,76.6 L241.6,76.6 L245.4,76.7 L249.3,76.8 L253.2,76.9 L257.0,77.0 L260.9,77.0 L264.8,77.0 L268.6,76.9 L272.5,77.0 L276.3,77.0 L280.2,77.0 L284.1,77.0 L287.9,77.0 L291.8,77.1 L295.7,77.1 L299.5,77.1 L303.4,77.2 L307.3,77.1 L311.1,77.2 L315.0,77.1 L318.9,77.1 L322.7,77.1 L326.6,77.0 L330.5,76.9 L334.3,76.9 L338.2,77.0 L342.1,77.0 L345.9,77.1 L349.8,77.1 L353.7,77.2 L357.5,77.2 L361.4,77.1 L365.3,77.1 L369.1,77.1 L373.0,77.2 L376.9,77.2 L380.7,77.2 L384.6,77.2 L388.5,77.2 L392.3,77.2 L396.2,77.1 L400.1,77.0 L403.9,77.0 L407.8,77.0 L411.7,77.0 L415.5,77.0 L419.4,77.1 L423.2,77.1 L427.1,77.1 L431.0,77.0 L434.8,77.1 L438.7,77.1 L442.6,77.1 L446.4,77.1 L450.3,77.2 L454.2,77.2 L458.0,77.3 L461.9,77.3 L465.8,77.3 L469.6,77.3 L473.5,77.3 L477.4,77.3 L481.2,77.2 L485.1,77.2 L489.0,77.1 L492.8,77.1 L496.7,77.1 L500.6,77.0 L504.4,77.0 L508.3,77.0 L512.2,77.0 L516.0,77.0 L519.9,76.9 L523.8,76.9 L527.6,76.9 L531.5,77.0 L535.4,76.9 L539.2,77.0 L543.1,77.0 L547.0,77.1 L550.8,77.0 L554.7,77.0 L558.6,77.1 L562.4,77.0 L566.3,77.1 L570.1,77.1 L574.0,77.1 L577.9,77.1 L581.7,77.0 L585.6,77.1 L589.5,77.1 L593.3,77.0 L597.2,77.0 L601.1,77.0 L604.9,77.0 L608.8,77.0 L612.7,77.0 L616.5,77.0 L620.4,77.1 L624.3,77.1 L628.1,77.1 L632.0,77.2"/><circle class="dot s3" cx="632.0" cy="77.2" r="3.5"/><path class="ln s4" d="M56.0,76.7 L59.9,76.7 L63.7,76.7 L67.6,76.7 L71.5,76.7 L75.3,76.7 L79.2,76.7 L83.1,76.7 L86.9,76.7 L90.8,76.7 L94.7,76.7 L98.5,76.7 L102.4,76.7 L106.3,76.7 L110.1,76.7 L114.0,76.7 L117.9,76.7 L121.7,76.7 L125.6,76.7 L129.4,76.7 L133.3,76.7 L137.2,76.7 L141.0,76.7 L144.9,76.7 L148.8,76.7 L152.6,76.7 L156.5,76.7 L160.4,76.7 L164.2,76.7 L168.1,76.7 L172.0,76.7 L175.8,76.7 L179.7,76.7 L183.6,76.7 L187.4,76.7 L191.3,76.7 L195.2,76.7 L199.0,76.7 L202.9,76.7 L206.8,76.7 L210.6,76.7 L214.5,76.7 L218.4,76.7 L222.2,76.7 L226.1,76.7 L230.0,76.7 L233.8,76.7 L237.7,76.7 L241.6,76.7 L245.4,76.7 L249.3,76.7 L253.2,76.7 L257.0,76.7 L260.9,76.7 L264.8,76.7 L268.6,76.7 L272.5,76.7 L276.3,76.7 L280.2,76.7 L284.1,76.7 L287.9,76.7 L291.8,76.7 L295.7,76.7 L299.5,76.7 L303.4,76.7 L307.3,76.7 L311.1,76.7 L315.0,76.7 L318.9,76.7 L322.7,76.7 L326.6,76.7 L330.5,76.7 L334.3,76.7 L338.2,76.7 L342.1,76.7 L345.9,76.7 L349.8,76.7 L353.7,76.7 L357.5,76.7 L361.4,76.7 L365.3,76.7 L369.1,76.7 L373.0,76.7 L376.9,76.7 L380.7,76.7 L384.6,76.7 L388.5,76.7 L392.3,76.7 L396.2,76.7 L400.1,76.7 L403.9,76.7 L407.8,76.7 L411.7,76.7 L415.5,76.7 L419.4,76.7 L423.2,76.7 L427.1,76.7 L431.0,76.7 L434.8,76.7 L438.7,76.7 L442.6,76.7 L446.4,76.7 L450.3,76.7 L454.2,76.7 L458.0,76.7 L461.9,76.7 L465.8,76.7 L469.6,76.7 L473.5,76.7 L477.4,76.7 L481.2,76.7 L485.1,76.7 L489.0,76.7 L492.8,76.7 L496.7,76.7 L500.6,76.7 L504.4,76.7 L508.3,76.7 L512.2,76.7 L516.0,76.7 L519.9,76.7 L523.8,76.7 L527.6,76.7 L531.5,76.7 L535.4,76.7 L539.2,76.7 L543.1,76.7 L547.0,76.7 L550.8,76.7 L554.7,76.7 L558.6,76.7 L562.4,76.7 L566.3,76.7 L570.1,76.7 L574.0,76.7 L577.9,76.7 L581.7,76.7 L585.6,76.7 L589.5,76.7 L593.3,76.7 L597.2,76.7 L601.1,76.7 L604.9,76.7 L608.8,76.7 L612.7,76.7 L616.5,76.7 L620.4,76.7 L624.3,76.7 L628.1,76.7 L632.0,76.7"/><circle class="dot s4" cx="632.0" cy="76.7" r="3.5"/><text class="endlab" x="641.0" y="33.2">live <tspan class="endval">24.82</tspan></text><text class="endlab" x="641.0" y="76.7">flat <tspan class="endval">0.00</tspan></text><text class="endlab" x="641.0" y="91.7">buy-hold <tspan class="endval">−0.28</tspan></text><text class="endlab" x="641.0" y="169.3">inverted <tspan class="endval">−52.95</tspan></text><text class="endlab" x="641.0" y="248.8">shuffled <tspan class="endval">−98.39</tspan></text></svg><div class="legend"><span class="lg-item"><span class="sw s1"></span>live signal</span><span class="lg-item"><span class="sw s2"></span>inverted</span><span class="lg-item"><span class="sw s5"></span>shuffled</span><span class="lg-item"><span class="sw s3"></span>buy &amp; hold</span><span class="lg-item"><span class="sw s4"></span>flat</span></div></div>
+</section>
+<section><h2>Is it really a signal?</h2>
+<p>A directional strategy is much easier to fool than a market-making
+one, so the arms below exist to catch it. Each destroys the signal while leaving
+the machinery, the costs and the paths identical.</p>
+<div class="card"><h3>Signal-destruction controls at ε = 0.025</h3><h4>Mean P&amp;L per episode</h4><svg class="chart" viewBox="0 0 760 280" role="img" aria-label="Signal-destruction controls" data-chart="ctl"><line class="zero" x1="24" y1="66.3" x2="736" y2="66.3"/><rect class="bar-pos" x="58.2" y="32.2" width="74.0" height="34.2" rx="2"><title>directional / live: 24.857</title></rect><text class="barval" x="95.2" y="26.2">24.86</text><text class="barlab" x="95.2" y="242.0">live signal</text><text class="barlab" x="95.2" y="254.0">822 trades</text><rect class="bar-neg" x="200.6" y="66.3" width="74.0" height="72.9" rx="2"><title>directional / inverted: −52.967</title></rect><text class="barval" x="237.6" y="153.2">−52.97</text><text class="barlab" x="237.6" y="242.0">inverted</text><text class="barlab" x="237.6" y="254.0">833 trades</text><rect class="bar-neg" x="343.0" y="66.3" width="74.0" height="135.3" rx="2"><title>directional / shuffled: −98.357</title></rect><text class="barval" x="380.0" y="215.6">−98.36</text><text class="barlab" x="380.0" y="242.0">shuffled</text><text class="barlab" x="380.0" y="254.0">2649 trades</text><rect class="bar-neg" x="485.4" y="66.3" width="74.0" height="1.2" rx="2"><title>buy-hold: −0.289</title></rect><text class="barval" x="522.4" y="80.7">−0.29</text><text class="barlab" x="522.4" y="242.0">buy &amp; hold</text><text class="barlab" x="522.4" y="254.0">0 trades</text><rect class="bar-net" x="627.8" y="66.3" width="74.0" height="1.2" rx="2"><title>flat: 0.000</title></rect><text class="barval" x="664.8" y="80.3">0.00</text><text class="barlab" x="664.8" y="242.0">flat</text><text class="barlab" x="664.8" y="254.0">0 trades</text></svg></div>
+<ul>
+<li><strong>flat earns exactly zero</strong>, to the last decimal, on every path. The
+accounting has no leak.</li>
+<li><strong>buy and hold earns nothing</strong> (−0.289).
+There is no drift to be had from simply being long; the P&amp;L is not exposure.</li>
+<li><strong>Inverting the signal loses more than the live arm makes</strong>
+(−52.97 against 24.86). That asymmetry is the give-away that it is real:
+both arms pay the same spread, and only one of them is on the right side of the
+drift.</li>
+<li><strong>Shuffling the signal's timing is catastrophic</strong> (−98.36
+on 2649 trades against 822).
+A signal with the right distribution and the wrong timing does not merely fail to
+earn — it churns, and every turn pays the spread.</li>
+</ul>
+</section>
+<section><h2>Full sweep</h2>
+<div class="tablewrap"><table><thead><tr><th class="mlab">market-order impact ε</th><th>0.001</th><th>0.003</th><th>0.006</th><th>0.01</th><th>0.015</th><th>0.025</th></tr></thead><tbody><tr><td class="mlab">Directional — mean P&amp;L</td><td class="num">−0.226</td><td class="num">−0.555</td><td class="num">0.370</td><td class="num">5.429</td><td class="num">13.366</td><td class="num">24.857</td></tr><tr><td class="mlab">Directional — Sharpe</td><td class="num">−0.65</td><td class="num">−0.54</td><td class="num">0.14</td><td class="num">1.43</td><td class="num">2.68</td><td class="num">4.18</td></tr><tr><td class="mlab">Directional — trades</td><td class="num">15</td><td class="num">126</td><td class="num">446</td><td class="num">734</td><td class="num">857</td><td class="num">822</td></tr><tr><td class="mlab">Directional — win rate</td><td class="num">13%</td><td class="num">27%</td><td class="num">65%</td><td class="num">93%</td><td class="num">100%</td><td class="num">100%</td></tr><tr><td class="mlab">Directional — spread paid</td><td class="num">−0.31</td><td class="num">−2.77</td><td class="num">−10.33</td><td class="num">−17.49</td><td class="num">−20.44</td><td class="num">−19.25</td></tr><tr><td class="mlab">Directional — markout earned</td><td class="num">0.06</td><td class="num">2.04</td><td class="num">10.23</td><td class="num">21.98</td><td class="num">32.26</td><td class="num">41.72</td></tr><tr><td class="mlab">Market maker — mean P&amp;L</td><td class="num">14.278</td><td class="num">11.722</td><td class="num">8.863</td><td class="num">5.833</td><td class="num">4.019</td><td class="num">0.857</td></tr><tr><td class="mlab">Market maker — Sharpe</td><td class="num">8.48</td><td class="num">7.05</td><td class="num">5.78</td><td class="num">4.69</td><td class="num">3.21</td><td class="num">0.69</td></tr><tr><td class="mlab">Market maker — capture ratio</td><td class="num">92.7%</td><td class="num">79.9%</td><td class="num">66.8%</td><td class="num">53.8%</td><td class="num">40.9%</td><td class="num">20.5%</td></tr><tr><td class="mlab">Market maker — markout paid</td><td class="num">−1.13</td><td class="num">−3.07</td><td class="num">−4.81</td><td class="num">−6.15</td><td class="num">−7.01</td><td class="num">−7.25</td></tr><tr><td class="mlab">Control — inverted signal</td><td class="num">−0.35</td><td class="num">−3.29</td><td class="num">−12.31</td><td class="num">−25.25</td><td class="num">−38.13</td><td class="num">−52.97</td></tr><tr><td class="mlab">Control — shuffled signal</td><td class="num">−7.09</td><td class="num">−33.59</td><td class="num">−79.72</td><td class="num">−109.02</td><td class="num">−114.01</td><td class="num">−98.36</td></tr><tr><td class="mlab">Control — buy and hold</td><td class="num">0.000</td><td class="num">−0.024</td><td class="num">−0.060</td><td class="num">−0.108</td><td class="num">−0.169</td><td class="num">−0.289</td></tr><tr><td class="mlab">Control — flat</td><td class="num">0.000</td><td class="num">0.000</td><td class="num">0.000</td><td class="num">0.000</td><td class="num">0.000</td><td class="num">0.000</td></tr></tbody></table></div>
+<p class="sub">P&amp;L is in price units on an asset near 100, one unit
+per trade. ε = 0.001 is the value the robust paper calibrates to real data in its
+section 5; the higher levels are counterfactuals chosen to locate the crossover,
+not claims about any venue.</p>
+</section>
+<section><h2>What this does and does not show</h2>
+<div class="callout warn"><h4>The directional result is a statement
+about the simulator's signal, and that signal was put there by hand</h4>
+<p>The market-making result rested on a mechanism — quote, get filled, manage
+inventory — that is largely structural. The directional result rests on the
+existence and size of an order-flow drift, which in this model is a parameter. That
+order flow predicts short-horizon returns is a well-documented empirical
+regularity, but its magnitude relative to the spread is exactly the thing that has
+to be measured on real data before any of this is a strategy.</p></div>
+<ul>
+<li><strong>Below the crossover it loses money, and that is the honest result.</strong>
+At the paper's own ε the strategy trades a handful of times on noise and gives back
+−0.226. An estimator that is statistically unbiased will still be fooled when the
+signal-to-noise is low; the no-trade band suppresses most of that, not all.</li>
+<li><strong>Correcting the estimator made it worse at low signal.</strong> The first
+version was biased low by the factor (1−e^(−βh))/(βh) — a known artefact of fitting
+a decaying feature to an average forward return. De-attenuating it is the right
+thing to do statistically, and it removed an accidental conservatism that had been
+protecting the strategy. Shrinking the signal by its own t-statistic buys back a
+little of that (about 0.1 of Sharpe at every level) but does not close the gap.</li>
+<li><strong>Turnover is very high above the crossover</strong> — hundreds of trades per
+twenty-minute episode. There are no fees, no latency and no queue in this
+simulator, and all three fall hardest on exactly that behaviour.</li>
+<li><strong>The taker's orders impact the price but do not excite the arrival
+process.</strong> The Hawkes process is calibrated to client flow at a branching ratio
+of 0.9; adding the taker's own orders to the self-excitation pushes it above 1 and
+the market explodes. Price impact and book thinning still apply to every order the
+strategy sends, so it pays for its own footprint.</li>
+</ul>
+</section>
+<footer>Generated from <code>experiments/directional_sweep.py</code> and
+<code>experiments/build_directional_report.py</code> · 60 Monte Carlo paths per
+point, common random numbers across arms · the closed-form control is verified against
+the Hamilton–Jacobi–Bellman residual, and the P&amp;L attribution reconciles exactly on
+every path ·  tests.</footer>
+</div>
+<div class="tt" id="tt"></div>
+<script>
+const PAYLOADS = [];
+const tt = document.getElementById('tt');
+const cssVar = s => getComputedStyle(document.documentElement).getPropertyValue('--'+s);
+
+for (const p of PAYLOADS) {
+  const svg = document.querySelector('[data-chart="'+p.id+'"]');
+  if (!svg) continue;
+  const hit = svg.querySelector('.hit');
+  const cx = svg.querySelector('#'+p.id+'-cx');
+  const plotW = p.w - p.padL - p.padR;
+
+  function show(evt) {
+    const box = svg.getBoundingClientRect();
+    const scale = box.width / p.w;
+    const xLocal = (evt.clientX - box.left) / scale;
+    let f = (xLocal - p.padL) / plotW;
+    f = Math.max(0, Math.min(1, f));
+    const i = Math.round(f * (p.t.length - 1));
+    const x = p.padL + (p.t[i] / p.horizon) * plotW;
+    cx.setAttribute('x1', x); cx.setAttribute('x2', x);
+    cx.style.opacity = 0.45;
+    const rows = p.series
+      .map(s => ({n: s.name, slot: s.slot, v: s.y[i]}))
+      .sort((a, b) => b.v - a.v)
+      .map(r => '<div class="tt-r"><span class="tt-n"><span class="sw ' + r.slot +
+        '"></span>' + r.n + '</span><span class="tt-v">' + r.v.toFixed(2) + '</span></div>')
+      .join('');
+    tt.innerHTML = '<div class="tt-t">t = ' + (p.t[i] / 60).toFixed(1) + ' min</div>' + rows;
+    tt.style.opacity = 1;
+    const w = tt.offsetWidth, h = tt.offsetHeight;
+    let left = evt.clientX + 16, top = evt.clientY - h / 2;
+    if (left + w > window.innerWidth - 8) left = evt.clientX - w - 16;
+    tt.style.left = Math.max(8, left) + 'px';
+    tt.style.top = Math.max(8, Math.min(window.innerHeight - h - 8, top)) + 'px';
+  }
+  function hide() { tt.style.opacity = 0; cx.style.opacity = 0; }
+
+  hit.addEventListener('mousemove', show);
+  hit.addEventListener('mouseleave', hide);
+  hit.addEventListener('touchmove', e => { if (e.touches[0]) show(e.touches[0]); }, {passive: true});
+  hit.addEventListener('touchend', hide);
+}
+
+// Per-mark tooltips for bar and box charts use native <title>, which needs no script.
+</script>

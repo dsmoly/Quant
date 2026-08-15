@@ -210,13 +210,24 @@ class DealerMarket:
 
         self.t += dt
 
-    def _apply_market_order(self, side_idx: int) -> None:
-        """Jumps triggered by a market order: alpha impact, Hawkes and depth excitation."""
+    def _apply_market_order(self, side_idx: int, excite_arrivals: bool = True) -> None:
+        """Jumps triggered by a market order: alpha impact, Hawkes and depth excitation.
+
+        ``excite_arrivals`` is False for the directional trader's own orders. The
+        Hawkes process is calibrated to the *client* order flow the dealer faces,
+        with a branching ratio of 0.9 at the paper's parameters; the taker is one
+        participant already inside that calibration, so adding its orders to the
+        self-excitation double-counts them and pushes the effective branching
+        ratio above 1, at which point the arrival process is explosive rather than
+        stationary. Price impact and book thinning still apply to every order,
+        including the taker's, so a strategy always pays for its own footprint.
+        """
         d = self.dyn
         self.alpha += (1.0 if side_idx == 0 else -1.0) * d.eps   # buy MOs push the price up
         other = 1 - side_idx
-        self.lam[side_idx] += d.eta_lam
-        self.lam[other] += d.nu_lam
+        if excite_arrivals:
+            self.lam[side_idx] += d.eta_lam
+            self.lam[other] += d.nu_lam
         self.kap[side_idx] += d.eta_kap
         self.kap[other] += d.nu_kap
 
@@ -299,6 +310,8 @@ class DealerMarket:
             time_path.append(self.t)
             mid_path.append(self.S)
             n_events += 1
+            if n_events >= self.MAX_EVENTS:
+                break
 
         # Terminal payoff X_T + q_T (S_T - l(q_T)) with l(q) = theta * q: the cost of
         # unwinding the book relative to marking it at the midprice is theta * q^2.
@@ -318,6 +331,114 @@ class DealerMarket:
             theta=self.theta,
             supra_fraction=self.supra_time / max(horizon, 1e-9),
         )
+
+
+    # --------------------------------------------------------- taker interface
+
+    MAX_EVENTS = 400_000        # guard against near-critical Hawkes bursts
+
+    def run_taker(self, trader, horizon: float) -> "RunResult":
+        """Simulate a directional trader who *crosses* the dealer spread.
+
+        The taker sees exactly what the market maker saw -- signed order arrivals
+        and midprices -- and may adjust its position at every market order.  Its
+        own trades are market orders like any other: they pay the prevailing
+        dealer half-spread ``mu_t``, tilt the short-term alpha by ``eps``, and
+        excite the arrival intensities.  Nothing here lets the strategy trade
+        without paying for its own footprint.
+        """
+        t_prev_event = 0.0
+        inv_path: list[int] = []
+        pnl_path: list[float] = []
+        mu_path: list[float] = []
+        time_path: list[float] = []
+        mid_path: list[float] = []
+        n_events = 0
+
+        while self.t < horizon:
+            bound = self._intensity_bound()
+            dt = self.rng.exponential(1.0 / bound)
+            if self.t + dt > horizon:
+                self._advance(horizon - self.t)
+                break
+            self._advance(dt)
+
+            total = float(self.lam.sum())
+            u = self.rng.random() * bound
+            if u >= total:
+                continue                       # thinning rejection
+            side_idx = 0 if u < self.lam[0] else 1
+            side = "buy" if side_idx == 0 else "sell"
+
+            # The order hits the market first; the taker reacts to it.
+            self._apply_market_order(side_idx)
+
+            obs = TakerObservation(
+                time=self.t, dt=self.t - t_prev_event, mid=self.S, order_side=side,
+                half_spread=self.mu, inventory=self.q, wealth=self.wealth,
+            )
+            t_prev_event = self.t
+            target = trader.decide(obs)
+            self._execute_taker(target)
+
+            inv_path.append(self.q)
+            pnl_path.append(self.wealth)
+            mu_path.append(self.mu)
+            time_path.append(self.t)
+            mid_path.append(self.S)
+            n_events += 1
+            if n_events >= self.MAX_EVENTS:
+                break
+
+        liquidation = self.theta * self.q**2
+        return RunResult(
+            pnl=self.wealth - liquidation,
+            terminal_inventory=self.q,
+            n_fills=len(self.fills),
+            n_rfq=n_events,
+            inventory_path=np.array(inv_path),
+            pnl_path=np.array(pnl_path),
+            mu_path=np.array(mu_path),
+            time_path=np.array(time_path),
+            mid_path=np.array(mid_path),
+            fills=list(self.fills),
+            final_mid=self.S,
+            theta=self.theta,
+            supra_fraction=self.supra_time / max(horizon, 1e-9),
+        )
+
+    def _execute_taker(self, target: int) -> None:
+        """Move the taker's position toward ``target``, one unit at a time.
+
+        Each unit crosses the spread at ``S +/- mu`` and then impacts the market
+        exactly as any other market order of that side would.
+        """
+        target = int(np.clip(target, -self.q_max, self.q_max))
+        while self.q != target:
+            buying = target > self.q
+            price = self.S + self.mu if buying else self.S - self.mu
+            if buying:
+                self.cash -= price
+                self.q += 1
+            else:
+                self.cash += price
+                self.q -= 1
+            # Depth is recorded as negative: the taker pays the spread it quotes past.
+            self.fills.append(Fill("bid" if buying else "ask", -self.mu, price, self.t))
+            self._apply_market_order(0 if buying else 1, excite_arrivals=False)
+
+
+@dataclass
+class TakerObservation:
+    """What a directional trader sees at each market order."""
+
+    time: float
+    dt: float                        # time since the previous order
+    mid: float
+    order_side: str                  # "buy" if the order lifted the offer
+    half_spread: float               # dealer population quote: what crossing costs
+    inventory: int
+    wealth: float
 
 
 @dataclass
