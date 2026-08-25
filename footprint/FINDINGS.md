@@ -335,3 +335,89 @@ python3 -m experiments.noise_floor --size-scan   # §3
 python3 -m experiments.walk_forward              # §4, §5, §6
 python3 -m experiments.walk_forward --data-dir data   # with real files
 ```
+
+---
+
+## 7. Entropy tail estimation: implemented, measured, and it loses
+
+Ported the Pareto-kernel differential-entropy estimator from Matsushita et al.
+(2025) into `src/entropy.py` and ran it head-to-head against the two estimators
+already here, on symmetric alpha-stable data where the stability parameter *is*
+the tail index. `experiments/tail_bakeoff.py`, 25 reps.
+
+**Recovery of a known alpha** (median estimate, bias):
+
+| true α | entropy | bias | Hill | bias | GPD |
+|---|---|---|---|---|---|
+| **n=61** | | | | | |
+| 0.8 | 0.72 | −0.08 | 0.78 | **−0.02** | fails 100% |
+| 1.2 | 1.35 | +0.15 | 1.31 | **+0.11** | fails 100% |
+| 1.5 | 1.91 | +0.41 | 1.77 | **+0.27** | fails 100% |
+| 1.8 | 5.32 | +3.52 | 2.47 | **+0.67** | fails 100% |
+| **n=500** | | | | | |
+| 0.8 | 0.67 | −0.13 | 0.79 | **−0.01** | fails 100% |
+| 1.2 | 1.06 | −0.14 | 1.21 | **+0.01** | fails 100% |
+| 1.5 | 1.68 | **+0.18** | 1.83 | +0.33 | fails 100% |
+
+**Discriminating α=1.5 from α=2.0** (AUC; 0.5 is a coin flip):
+
+| | n=61 | n=500 |
+|---|---|---|
+| Hill | **0.962** | **1.000** |
+| entropy | 0.876 | 0.978 |
+| GPD | — | — |
+
+**Verdict: Hill wins.** It is less biased at almost every alpha and discriminates
+better at both sample sizes. The entropy estimator's selling point was avoiding
+Hill's choice of k -- and that is real, it has no threshold to choose -- but the
+plateau rule already in `tailrisk.py` handles k well enough that the tradeoff is
+not worth taking. **There is no case for routing it into the sizing engine**, and
+it is not wired into anything; it sits beside Hill and GPD as a third opinion.
+
+The GPD column is its own finding: the threshold selector never finds an
+admissible threshold on alpha-stable data at these sizes, so it fails outright.
+That is honest behaviour rather than a bug -- it declines instead of inventing a
+number -- but it means GPD is unusable for windowed tail work.
+
+### A real bug the validation caught
+
+The bandwidth search was originally scaled by the sample standard deviation.
+**An alpha-stable law with alpha < 2 has infinite variance**, so that statistic
+does not estimate anything -- it just tracks the largest draw -- and the search
+range landed in the wrong place. On alpha = 0.8 data the fit pinned alpha-hat at
+its 6.0 upper bound, i.e. reported *the heaviest-tailed sample in the suite as
+Gaussian*. Fixed by scaling from the interquartile range, which is finite for
+every alpha. Pinned by `test_heavy_tails_are_not_reported_as_gaussian`.
+
+### Two predictions of mine that were wrong
+
+Both were arguments I made against the method before measuring, and both were
+too pessimistic:
+
+1. **"The centred window is fatal."** The paper computes its label at t from
+   `t-30 .. t+30`, i.e. thirty days of future data, and I expected removing that
+   to destroy the signal. On a synthetic tape with a genuine embedded regime, the
+   trailing window **retains 92%** of the regime separation (3.12 vs 3.38 in
+   alpha units). The look-ahead is real and must be removed -- it is, and a test
+   pins it -- but it was not doing the work.
+2. **"A rolling tail index at n=61 is mostly noise."** At n=61 both estimators
+   discriminate α=1.5 from α=2.0 with AUC 0.88-0.96. That is usable. The window
+   is short but not hopeless.
+
+### The controls pass
+
+False "heavy-tailed" rate on thin-tailed data: **0% for all three estimators**,
+on both iid Gaussian and AR(1) with rho=0.7. The autocorrelation control is the
+one worth having -- serially dependent but thin-tailed data is the obvious
+false-positive mode for any windowed estimator, and financial returns are
+serially dependent in volatility. Nothing spurious fires.
+
+### What this does *not* answer
+
+Whether any of it raises IC. It cannot: a tail estimate feeds position *sizing*,
+which moves Sharpe, while IC is the correlation between signal and forward
+return. The testable version is conditional IC -- is the signal's IC higher in
+light-tailed regimes? -- and that needs a measured base IC first, which does not
+exist. Splitting a sample into two regimes also raises the noise floor in each by
+roughly sqrt(2), from |IC| ~ 0.016 to ~0.023, so the base edge has to be
+comfortably real before slicing it is worth doing.
