@@ -421,3 +421,56 @@ light-tailed regimes? -- and that needs a measured base IC first, which does not
 exist. Splitting a sample into two regimes also raises the noise floor in each by
 roughly sqrt(2), from |IC| ~ 0.016 to ~0.023, so the base edge has to be
 comfortably real before slicing it is worth doing.
+
+---
+
+## 8. Run on real data: an underpowered test, not a negative result
+
+The features were finally run on real prices — the 13 converted ETF series,
+`experiments/walk_forward.py --data-dir data --min-coverage 0.15`, purged
+walk-forward, three folds, 1394 sessions from 2020-07 to 2026-02.
+
+Out-of-sample IC against a **shuffled-timing null measured on this exact panel**
+(200 shuffles per feature per horizon):
+
+| feature | h | OOS IC | null 95% | null t95 | clears? |
+|---|---|---|---|---|---|
+| amihud | 2 | −0.0333 | 0.0670 | 2.13 | no |
+| amihud | 10 | −0.0059 | 0.0955 | 2.41 | no |
+| abnormal_lambda | 10 | +0.0127 | 0.0620 | 2.08 | no |
+| persistent_imbalance | 10 | +0.0312 | 0.0560 | 1.99 | no |
+| dollar_volume_anomaly | 10 | +0.0377 | 0.0548 | 1.89 | no |
+| footprint_score | 5 | +0.0158 | 0.0615 | 2.10 | no |
+
+**Nothing clears. And the result means almost nothing, because the test has no
+power.**
+
+The null floor here is **0.05–0.10**. On the 25-name synthetic panel it was
+0.016. The difference is width, not history: the cross-section is only about
+**five names wide on a median day**, and the rank correlation of a five-element
+cross-section is nearly information-free. The effect being hunted is 0.02–0.04,
+so **the floor is two to three times larger than the signal**. This design cannot
+distinguish "no edge" from "an edge of exactly the expected size".
+
+Reporting this as "footprint refuted on real data" would be inheriting a
+conclusion the data cannot support. It is a failed measurement.
+
+Two things are worth keeping:
+
+* **No feature fired spuriously.** On real prices, with all their gaps and
+  discreteness, nothing produced an anomalously large IC. That is a weak but
+  genuine construction check that the features are not picking up an artifact of
+  their own definition.
+* The null t95 came in at **1.77–2.53 against a nominal 1.96**, reproducing the
+  Newey-West under-correction on real data rather than synthetic.
+
+One detail to check first when a wider panel exists, worth nothing on its own:
+`persistent_imbalance` and `dollar_volume_anomaly` are both *positive* at ten days
+(+0.031, +0.038) — the continuation direction assumed in `DEFAULT_SIGNS`, not the
+reversal direction the short-term-reversal literature would predict. Both sit
+well inside the noise.
+
+**What the test needed and did not have is width.** 1394 sessions is ample
+history. Twenty-plus names per day would put the floor near 0.016 and make the
+target range detectable. Until then the footprint hypothesis remains untested
+rather than refuted.

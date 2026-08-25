@@ -54,13 +54,14 @@ from src.universe import SURVIVORSHIP_NOTE, liquid_universe
 from src.validation import assert_no_leakage, fold_report, purged_walk_forward
 
 BANNER = "!" * 78
+MIN_NAMES = 5
 
 
-def load_or_simulate(data_dir, n_names, n_days, seed):
+def load_or_simulate(data_dir, n_names, n_days, seed, min_coverage=0.6):
     """Real files if present, synthetic otherwise -- and say which, unmistakably."""
     if data_dir:
         try:
-            panel = load_panel(data_dir, min_coverage=0.6)
+            panel = load_panel(data_dir, min_coverage=min_coverage)
             print(f"REAL DATA: {len(panel.tickers)} tickers, "
                   f"{panel.dates.min().date()} to {panel.dates.max().date()}, "
                   f"{len(panel.dates)} sessions")
@@ -90,7 +91,7 @@ def ic_table(signal, close, horizons, lag) -> dict:
     out = {}
     for h in horizons:
         fwd = tradable_forward_returns(close, h, lag)
-        ic = cross_sectional_ic(signal, fwd)
+        ic = cross_sectional_ic(signal, fwd, min_names=MIN_NAMES)
         s = summarise_ic(ic)
         out[h] = {"mean_ic": s.mean_ic, "t_naive": s.t_stat,
                   "t_nw": ic_newey_west_t(ic, lags=h + lag),
@@ -101,7 +102,7 @@ def ic_table(signal, close, horizons, lag) -> dict:
 def oos_ic(signal, close, folds, horizon, lag) -> tuple[float, float, int]:
     """Mean IC over test blocks only, pooled across folds."""
     fwd = tradable_forward_returns(close, horizon, lag)
-    ic = cross_sectional_ic(signal, fwd)
+    ic = cross_sectional_ic(signal, fwd, min_names=MIN_NAMES)
     pieces = []
     for f in folds:
         pieces.append(ic.reindex(f.test_dates).dropna())
@@ -154,6 +155,10 @@ def main(argv=None) -> int:
     ap.add_argument("--days", type=int, default=2000)
     ap.add_argument("--seed", type=int, default=11)
     ap.add_argument("--universe-size", type=int, default=20)
+    ap.add_argument("--min-coverage", type=float, default=0.6,
+                    help="drop tickers present for less than this share of sessions")
+    ap.add_argument("--min-names", type=int, default=5,
+                    help="minimum cross-section width to score a date")
     ap.add_argument("--horizons", type=int, nargs="+", default=[2, 5, 10])
     ap.add_argument("--primary-horizon", type=int, default=5)
     ap.add_argument("--costs-bps", type=float, nargs="+", default=[5.0, 20.0, 60.0])
@@ -163,7 +168,10 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     warnings.filterwarnings("ignore", category=RuntimeWarning)
-    panel, is_real = load_or_simulate(args.data_dir, args.names, args.days, args.seed)
+    global MIN_NAMES
+    MIN_NAMES = args.min_names
+    panel, is_real = load_or_simulate(args.data_dir, args.names, args.days, args.seed,
+                                     min_coverage=args.min_coverage)
     close = panel.close
     lag = 1
 
