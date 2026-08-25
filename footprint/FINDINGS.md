@@ -1,8 +1,10 @@
 # Findings
 
 Daily cross-sectional US equity strategy on institutional execution footprints.
-Built against a data-loader interface; **no real prices have been used**, because
-this container has no outbound network access (see *Data status* below).
+Built against a data-loader interface. **No footprint feature has been tested on
+real data.** One real-price dataset has since been converted (13 leveraged ETFs,
+IEX-only volume) — it is sound enough to measure the correlation structure and
+useless for the features themselves; see *Data status*.
 
 Everything here is therefore one of two things, and the difference is marked in
 every section:
@@ -16,10 +18,19 @@ every section:
 
 ## Data status
 
-`api.exchange.coinbase.com`, `data.lobsterdata.com` and `data.binance.vision`
-are all rejected by this environment's egress policy (403 to CONNECT). The
-allowlist reaches package registries and GitHub and nothing else — `www.google.com`
-is refused too. No prices were fabricated to fill the gap.
+`api.exchange.coinbase.com`, `data.lobsterdata.com`, `data.binance.vision` and
+`stooq.com` are all rejected by this environment's egress policy (403 to
+CONNECT). The allowlist reaches package registries and GitHub and nothing else —
+`www.google.com` is refused too. No prices were fabricated to fill the gap.
+
+GitHub *is* reachable, so `piekstra/market-data` was cloned and converted by
+`experiments/convert_parquet.py` into 13 daily CSVs now sitting in `data/`.
+Read `data/README.md` before using them: the volume column comes from Alpaca's
+`feed=iex`, a single venue holding ~2% of US consolidated volume, and every
+footprint feature is a function of volume. The universe is also entirely
+leveraged ETFs, which have no multi-day institutional accumulation to detect.
+The prices are real, which is why the breadth measurement in section 2 stands
+while nothing about the features does.
 
 The project reads Stooq-format CSVs from `data/` and runs end to end the moment
 files land there:
@@ -132,6 +143,38 @@ So the correct statement is narrower than "20 names is nowhere near 20 bets": fo
 a **net-exposed** book that is right and the haircut is severe; for a
 **dollar-neutral** book breadth is close to N and the naive calculation is not far
 wrong. Which one applies depends on the portfolio, not on the universe.
+
+### Measured on real data, and it corrects the claim above
+
+The convergence claim was made on synthetic panels. A partial check is now
+possible on real prices (13 leveraged ETFs from `piekstra/market-data`; volume
+there is unusable but *returns* are sound, since IEX prices track the NBBO for
+liquid names). On the four names with enough overlapping history, 1393 sessions:
+
+| | value |
+|---|---|
+| mean pairwise correlation | 0.752 |
+| PC1 share of variance | **82.0%** |
+| effective N (raw) | **1.45** of 4 |
+| effective N (residual, PC1 removed) | **1.74** |
+| Marchenko-Pastur factor count | 1 |
+
+At IC = 0.03 the naive `IC*sqrt(N)` gives IR 0.95; the honest figure is **0.57**,
+a 40% overstatement.
+
+This cuts against the synthetic finding. There, residual breadth came out close
+to N and the naive calculation was not far wrong for a neutral book. Here the
+haircut is severe *even after* projecting out PC1 -- with one factor at 82% there
+is almost nothing left underneath to diversify across. The synthetic generator's
+sector structure was too weak, exactly as flagged when the value was chosen.
+
+Neither number is the truth. Four 3x leveraged ETFs is the most correlated
+universe available and is the opposite extreme from the synthetic panel; real
+single-name equities sit somewhere between. The defensible conclusion is
+narrower than either: **the size of the breadth haircut is an empirical property
+of the universe and has to be measured per universe, not assumed** -- which is
+why `breadth_report` is called on the actual returns in every experiment rather
+than configured.
 
 **Caveat, and it is not small.** Residual breadth is highly sensitive to sector
 structure, which is a *modelling choice* in the synthetic generator rather than a
